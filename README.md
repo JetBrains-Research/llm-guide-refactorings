@@ -1,9 +1,6 @@
-# LLM Integration Plugin Template
+# LLMs guide IDE refactorings
 
-<!-- Plugin description -->
-**LLM Integration Plugin Template** is a repository that provides a template for creation of plugins accessing LLMs from
-IntelliJ-based IDEs.
-<!-- Plugin description end -->
+Researching collaboration between LLMs and IDEs to perform automated refactorings.
 
 ### Table of contents
 

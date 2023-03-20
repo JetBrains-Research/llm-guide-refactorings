@@ -1,6 +1,8 @@
 # LLMs guide IDE refactorings
 
+<!-- Plugin description -->
 Researching collaboration between LLMs and IDEs to perform automated refactorings.
+<!-- Plugin description end -->
 
 ### Table of contents
 

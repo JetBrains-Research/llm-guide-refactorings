@@ -1,0 +1,36 @@
+<idea-plugin package="com.intellij.ml.llm.template">
+    <id>com.intellij.ml.llm.template</id>
+    <name>LLM Integration Template</name>
+    <vendor>JetBrains</vendor>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <applicationConfigurable
+                groupId="tools"
+                instance="com.intellij.ml.llm.template.settings.LLMConfigurable"
+                id="ml.llm.LLMConfigurable"
+                bundle="messages.LLMBundle"
+                key="settings.configurable.display.name"/>
+        <applicationConfigurable
+                groupId="ml.llm.LLMConfigurable"
+                instance="com.intellij.ml.llm.template.settings.openai.AdvancedSettingsConfigurable"
+                id="ml.llm.openai.AdvancedConfigurable"
+                bundle="messages.LLMBundle"
+                key="settings.configurable.openai.advanced.display.name"/>
+
+        <!--suppress PluginXmlExtensionRegistration -->
+        <intentionAction>
+            <className>com.intellij.ml.llm.template.intentions.ApplyCustomEditIntention</className>
+            <bundleName>messages.LLMBundle</bundleName>
+            <categoryKey>intention.category.codex</categoryKey>
+        </intentionAction>
+
+        <registryKey defaultValue="false"
+                     description="If enabled, emulates requests instead of using OpenAI API. Used for debug purposes."
+                     key="llm.for.code.enable.mock.requests"/>
+
+        <notificationGroup id="AI notification group" displayType="STICKY_BALLOON" bundle="messages.LLMBundle" key="notification.group.name"/>
+
+    </extensions>
+</idea-plugin>

@@ -28,6 +28,12 @@
             <categoryKey>intention.category.codex</categoryKey>
         </intentionAction>
 
+        <intentionAction>
+            <className>com.intellij.ml.llm.template.intentions.ApplyCustomExtractFunctionIntention</className>
+            <bundleName>messages.LLMBundle</bundleName>
+            <categoryKey>intention.category.extract.function</categoryKey>
+        </intentionAction>
+
         <registryKey defaultValue="false"
                      description="If enabled, emulates requests instead of using OpenAI API. Used for debug purposes."
                      key="llm.for.code.enable.mock.requests"/>

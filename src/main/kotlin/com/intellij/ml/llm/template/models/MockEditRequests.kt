@@ -6,7 +6,7 @@ class MockResponse(private val response: String) : LLMBaseResponse {
 
 class MockEditRequests(input: String) : LLMBaseRequest<String>(input) {
     override fun sendSync(): LLMBaseResponse {
-        return MockResponse(mutate(body))
+        return MockResponse(mockJson())
     }
 
     /**
@@ -20,6 +20,10 @@ class MockEditRequests(input: String) : LLMBaseRequest<String>(input) {
         val array = input.toCharArray()
         array[0] = array[0].inc()
         return array.joinToString(separator = "")
+    }
+
+    private fun mockJson() : String {
+        return """{"functionName":"getConnector","lineStart":92,"lineEnd": 92}"""
     }
 }
 

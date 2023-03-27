@@ -4,9 +4,9 @@ import com.intellij.codeInsight.intention.IntentionAction
 import com.intellij.lang.LanguageRefactoringSupport
 import com.intellij.lang.java.JavaLanguage
 import com.intellij.ml.llm.template.LLMBundle
-import com.intellij.ml.llm.template.models.CodexRequestProvider
-import com.intellij.ml.llm.template.models.LLMRequestProvider
-import com.intellij.ml.llm.template.models.sendEditRequest
+import com.intellij.ml.llm.template.models.*
+import com.intellij.openapi.actionSystem.DataContext
+import com.intellij.openapi.actionSystem.PlatformDataKeys
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.command.CommandProcessor
@@ -14,6 +14,7 @@ import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.editor.SelectionModel
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
@@ -28,12 +29,14 @@ import com.intellij.psi.PsiNameIdentifierOwner
 import com.intellij.psi.codeStyle.CodeStyleManager
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.psi.util.PsiUtilBase
+import com.intellij.refactoring.extractMethod.ExtractMethodHandler
 import com.intellij.refactoring.extractMethod.ExtractMethodProcessor
 import com.intellij.refactoring.extractMethod.PrepareFailedException
+import kotlinx.serialization.json.Json
 
 
 @Suppress("UnstableApiUsage")
-abstract class ApplyTransformationIntention(
+abstract class ApplyExtractFunctionTransformationIntention(
     private val llmRequestProvider: LLMRequestProvider = CodexRequestProvider
 ) : IntentionAction {
     private val logger = Logger.getInstance("#com.intellij.ml.llm")
@@ -78,19 +81,23 @@ abstract class ApplyTransformationIntention(
                 editor,
                 selectedElements,
                 null,
-                "extractedMethod",
-                "",
-                "Extracted method"
+                "Extract Method",
+                "newMethod",
+                null
             )
+            extractMethodProcessor.methodName = "anotherMethodName"
 
             try {
 //                 Perform the extraction
                 if (extractMethodProcessor.prepare()) {
-                    CommandProcessor.getInstance().executeCommand(project, {
-                        ApplicationManager.getApplication().runWriteAction {
-                            extractMethodProcessor.doRefactoring()
-                        }
-                    }, "Extract Method", null)
+//                    ExtractMethodHandler.extractMethod(project, extractMethodProcessor)
+                    extractMethodProcessor.doRefactoring()
+                    val x = 0
+//                    CommandProcessor.getInstance().executeCommand(project, {
+//                        ApplicationManager.getApplication().runWriteAction {
+//                            extractMethodProcessor.doRefactoring()
+//                        }
+//                    }, "Extract Method", null)
                 }
             } catch (e: PrepareFailedException) {
                 // Handle the error if the extraction is not possible
@@ -103,7 +110,7 @@ abstract class ApplyTransformationIntention(
 
     }
 
-    private fun invokeEf2(project: Project, editor: Editor?, file: PsiFile?) {
+    private fun performExtractFunction(project: Project, editor: Editor?, file: PsiFile?) {
         if (editor == null || file == null) return
         val document = editor.document
         val selectionModel = editor.selectionModel
@@ -114,8 +121,18 @@ abstract class ApplyTransformationIntention(
 
             val provider = LanguageRefactoringSupport.INSTANCE.forLanguage(JavaLanguage.INSTANCE)
             val refactoringActionHandler = provider.getExtractMethodHandler()
-            refactoringActionHandler?.invoke(project, editor, file, (editor as EditorEx).dataContext)
+            val dataContext = (editor as EditorEx).dataContext
+            refactoringActionHandler?.invoke(project, editor, file, dataContext)
         }
+    }
+
+    private fun selectLines(startLine: Int, endLine: Int, editor: Editor?) {
+        if (editor == null || editor.document == null) return
+        val selectionModel = editor.selectionModel
+        selectionModel.setSelection(
+            editor.document.getLineStartOffset(startLine),
+            editor.document.getLineEndOffset(endLine)
+        )
     }
 
     override fun invoke(project: Project, editor: Editor?, file: PsiFile?) {
@@ -125,24 +142,59 @@ abstract class ApplyTransformationIntention(
         val selectionModel = editor.selectionModel
         val selectedText = selectionModel.selectedText
         if (selectedText != null) {
-            val textRange = TextRange.create(selectionModel.selectionStart, selectionModel.selectionEnd)
-
-//            invokeEf1(project, editor, file)
-            invokeEf2(project, editor, file)
-//            transform(project, selectedText, editor, textRange)
+            /*
+             * The selected text should be the whole function. We have to follow the following steps:
+             * 1. Take the selected text, and send it to ChatGPT using a well formatted prompt
+             * 2. Process the reply
+             *      - how to handle multiple suggestions? Take the largest?
+             *      - options should be filtered based on some criteria such as how actionable they are,
+             *        how many lines of code do they cover, etc
+             * 3. Present suggestions to developer and let the developer choose
+             * 4. Based on the developer's choice, automatic Extract Function should be performed
+             */
+            invokeLlm(selectedText, project, editor, file, selectionModel)
         } else {
             val namedElement = getParentNamedElement(editor)
             if (namedElement != null) {
                 val queryText = namedElement.text
                 val textRange = namedElement.textRange
                 selectionModel.setSelection(textRange.startOffset, textRange.endOffset)
-                transform(project, queryText, editor, textRange)
+                invokeLlm(queryText, project, editor, file, selectionModel)
             } else {
                 selectionModel.selectLineAtCaret()
                 val textRange = getLineTextRange(document, editor)
-                transform(project, document.getText(textRange), editor, textRange)
+//                transform(project, document.getText(textRange), editor, textRange)
             }
         }
+    }
+
+    private fun invokeLlm(text: String, project: Project, editor: Editor, file: PsiFile, selectionModel: SelectionModel) {
+        logger.info("Invoking LLM with text: $text")
+        val instruction = "Instruction for LLM goes here"
+        val task = object : Task.Backgroundable(project, LLMBundle.message("intentions.request.extract.function.background.process.title")) {
+                override fun run(indicator: ProgressIndicator) {
+                    val response = sendEditRequest(
+                        project,
+                        text,
+                        instruction,
+                        llmRequestProvider = llmRequestProvider,
+                    )
+                    if (response != null) {
+                        response.getSuggestions().firstOrNull()?.let {
+                            invokeLater {
+                                val efs: EFSuggestion = Json.decodeFromString(EFSuggestionSerializer, it.text)
+                                applySuggestion(efs, project, editor, file )
+                            }
+                        }
+                    }
+                }
+            }
+        ProgressManager.getInstance().runProcessWithProgressAsynchronously(task, BackgroundableProcessIndicator(task))
+    }
+
+    private fun applySuggestion(efSuggestion: EFSuggestion, project: Project, editor: Editor, file: PsiFile) {
+        selectLines(efSuggestion.lineStart, efSuggestion.lineEnd, editor)
+        performExtractFunction(project, editor, file)
     }
 
     private fun showErrorHint(project: Project, editor: Editor, message: String) {
@@ -166,7 +218,7 @@ abstract class ApplyTransformationIntention(
 
         logger.info("Invoke transformation action with '$instruction' instruction for '$text'")
         val task =
-            object : Task.Backgroundable(project, LLMBundle.message("intentions.request.background.process.title")) {
+            object : Task.Backgroundable(project, LLMBundle.message("intentions.request.extract.function.background.process.title")) {
                 override fun run(indicator: ProgressIndicator) {
                     val response = sendEditRequest(
                         project,

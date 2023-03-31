@@ -126,10 +126,7 @@ abstract class ApplyTransformationIntention(
         val selectedText = selectionModel.selectedText
         if (selectedText != null) {
             val textRange = TextRange.create(selectionModel.selectionStart, selectionModel.selectionEnd)
-
-//            invokeEf1(project, editor, file)
-            invokeEf2(project, editor, file)
-//            transform(project, selectedText, editor, textRange)
+            transform(project, selectedText, editor, textRange)
         } else {
             val namedElement = getParentNamedElement(editor)
             if (namedElement != null) {

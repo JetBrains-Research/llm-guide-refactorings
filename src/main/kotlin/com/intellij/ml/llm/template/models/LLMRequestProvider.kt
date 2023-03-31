@@ -1,9 +1,6 @@
 package com.intellij.ml.llm.template.models
 
-import com.intellij.ml.llm.template.models.openai.OpenAICompletionRequest
-import com.intellij.ml.llm.template.models.openai.OpenAIEditRequest
-import com.intellij.ml.llm.template.models.openai.OpenAiCompletionRequestBody
-import com.intellij.ml.llm.template.models.openai.OpenAiEditRequestBody
+import com.intellij.ml.llm.template.models.openai.*
 import com.intellij.ml.llm.template.settings.LLMSettingsManager
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.util.registry.Registry
@@ -18,15 +15,18 @@ private const val CODEX_EDIT_MODEL = "code-davinci-edit-001"
 private const val GPT_COMPLETION_MODEL = "text-davinci-003"
 private const val GPT_EDIT_MODEL = "text-davinci-edit-001"
 
+private const val CHAT_GPT_3_5_TURBO = "gpt-3.5-turbo"
+
 private val logger = Logger.getInstance("#com.intellij.ml.llm.template.models")
 
-val CodexRequestProvider = LLMRequestProvider(CODEX_COMPLETION_MODEL, CODEX_EDIT_MODEL)
+val CodexRequestProvider = LLMRequestProvider(CODEX_COMPLETION_MODEL, CODEX_EDIT_MODEL, CHAT_GPT_3_5_TURBO)
 
-val GPTRequestProvider = LLMRequestProvider(GPT_COMPLETION_MODEL, GPT_EDIT_MODEL)
+val GPTRequestProvider = LLMRequestProvider(GPT_COMPLETION_MODEL, GPT_EDIT_MODEL, CHAT_GPT_3_5_TURBO)
 
 class LLMRequestProvider(
     val completionModel: String,
     val editModel: String,
+    val chatModel: String,
 ) {
     fun createEditRequest(
         input: String,
@@ -53,6 +53,21 @@ class LLMRequestProvider(
             "Sending request to OpenAI API with temperature=$temperature, topP=$topP, suggestions=$numberOfSuggestions"
         )
         return OpenAIEditRequest(body)
+    }
+
+    fun createChatGPTRequest(
+        body: OpenAiChatRequestBody,
+    ): LLMBaseRequest<*> {
+        if (Registry.`is`("llm.for.code.enable.mock.requests")) {
+            logger.info("Emulating request to the API to test response presentation")
+            return MockChatGPTRequest()
+        }
+
+        logger.info(
+            "Sending request to OpenAI API with model=$chatModel and messages=${body.messages}"
+        )
+
+        return OpenAIChatRequest(body)
     }
 
     fun createCompletionRequest(

@@ -28,3 +28,9 @@ class MockCompletionRequests : LLMBaseRequest<String>("") {
         return MockResponse("a = 15")
     }
 }
+
+class MockChatGPTRequest : LLMBaseRequest<String>("") {
+    override fun sendSync(): LLMBaseResponse {
+        return MockResponse("hello world from mock chat gpt")
+    }
+}

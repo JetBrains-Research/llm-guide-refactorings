@@ -4,6 +4,8 @@ package com.intellij.ml.llm.template.models
 
 import com.intellij.ml.llm.template.LLMBundle
 import com.intellij.ml.llm.template.models.openai.AuthorizationException
+import com.intellij.ml.llm.template.models.openai.OpenAiChatMessage
+import com.intellij.ml.llm.template.models.openai.OpenAiChatRequestBody
 import com.intellij.ml.llm.template.settings.LLMSettingsManager
 import com.intellij.ml.llm.template.showAuthorizationFailedNotification
 import com.intellij.ml.llm.template.showRequestFailedNotification
@@ -62,6 +64,21 @@ fun sendCompletionRequest(
         logProbs = 1
     )
 
+    return sendRequest(project, request)
+}
+
+fun sendChatRequest(
+    project: Project,
+    messages: List<OpenAiChatMessage>,
+    model: String? = null,
+    llmRequestProvider: LLMRequestProvider = CodexRequestProvider
+): LLMBaseResponse? {
+    val request = llmRequestProvider.createChatGPTRequest(
+        OpenAiChatRequestBody(
+            model = model ?: llmRequestProvider.chatModel,
+            messages = messages
+        )
+    )
     return sendRequest(project, request)
 }
 

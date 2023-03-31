@@ -39,3 +39,7 @@ class OpenAIEditRequest(body: OpenAiEditRequestBody) :
 
 class OpenAICompletionRequest(body: OpenAiCompletionRequestBody) :
     OpenAIBaseRequest<OpenAiCompletionRequestBody>("completions", body)
+
+class OpenAIChatRequest(body: OpenAiChatRequestBody) :
+    OpenAIBaseRequest<OpenAiChatRequestBody>("chat/completions", body)
+

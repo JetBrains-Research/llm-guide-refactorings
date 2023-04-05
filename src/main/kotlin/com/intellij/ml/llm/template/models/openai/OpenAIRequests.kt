@@ -4,14 +4,16 @@ import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.intellij.ml.llm.template.models.LLMBaseRequest
 import com.intellij.util.io.HttpRequests
+import org.jetbrains.kotlin.idea.debugger.coroutine.util.logger
 import java.net.HttpURLConnection
 
 open class OpenAIBaseRequest<Body>(path: String, body: Body) : LLMBaseRequest<Body>(body) {
     private val url = "https://api.openai.com/v1/$path"
 
-    override fun sendSync(): OpenAIResponse? {
+    override fun sendSync(): OpenAIChatResponse? {
         val apiKey = CredentialsHolder.getInstance().getOpenAiApiKey()?.ifEmpty { null }
             ?: throw AuthorizationException("OpenAI API Key is not provided")
+        val jsonBody = GsonBuilder().create().toJson(body)
 
         return HttpRequests.post(url, "application/json")
             .tuner {
@@ -20,13 +22,11 @@ open class OpenAIBaseRequest<Body>(path: String, body: Body) : LLMBaseRequest<Bo
                     it.setRequestProperty("OpenAI-Organization", organization)
                 }
             }
-            .connect { request ->
-                request.write(GsonBuilder().create().toJson(body))
-
+            .connect { request -> request.write(jsonBody)
                 val responseCode = (request.connection as HttpURLConnection).responseCode
                 if (responseCode == HttpURLConnection.HTTP_OK) {
                     val response = request.readString()
-                    Gson().fromJson(response, OpenAIResponse::class.java)
+                    Gson().fromJson(response, OpenAIChatResponse::class.java)
                 } else {
                     null
                 }

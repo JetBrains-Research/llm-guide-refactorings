@@ -1,15 +1,14 @@
 package com.intellij.ml.llm.template.intentions
 
+import com.google.gson.Gson
 import com.intellij.codeInsight.intention.IntentionAction
 import com.intellij.lang.LanguageRefactoringSupport
 import com.intellij.lang.java.JavaLanguage
+import com.intellij.lang.refactoring.RefactoringSupportProvider
 import com.intellij.ml.llm.template.LLMBundle
 import com.intellij.ml.llm.template.models.*
-import com.intellij.openapi.actionSystem.DataContext
-import com.intellij.openapi.actionSystem.PlatformDataKeys
-import com.intellij.openapi.application.ApplicationManager
+import com.intellij.ml.llm.template.models.openai.OpenAiChatMessage
 import com.intellij.openapi.application.invokeLater
-import com.intellij.openapi.command.CommandProcessor
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.Document
@@ -30,14 +29,14 @@ import com.intellij.psi.codeStyle.CodeStyleManager
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.psi.util.PsiUtilBase
 import com.intellij.refactoring.extractMethod.ExtractMethodHandler
-import com.intellij.refactoring.extractMethod.ExtractMethodProcessor
 import com.intellij.refactoring.extractMethod.PrepareFailedException
 import kotlinx.serialization.json.Json
+import org.jsoup.SerializationException
 
 
 @Suppress("UnstableApiUsage")
 abstract class ApplyExtractFunctionTransformationIntention(
-    private val llmRequestProvider: LLMRequestProvider = CodexRequestProvider
+    private val llmRequestProvider: LLMRequestProvider = GPTRequestProvider
 ) : IntentionAction {
     private val logger = Logger.getInstance("#com.intellij.ml.llm")
 
@@ -47,7 +46,8 @@ abstract class ApplyExtractFunctionTransformationIntention(
         return editor != null && file != null
     }
 
-    private fun findSelectedPsiElements(editor: Editor, file: PsiFile?): Array<PsiElement> {
+    private fun findSelectedPsiElements(editor: Editor?, file: PsiFile?): Array<PsiElement> {
+        if (editor == null) { return emptyArray() }
         val selectionModel = editor.selectionModel
         val startOffset = selectionModel.selectionStart
         val endOffset = selectionModel.selectionEnd
@@ -76,32 +76,40 @@ abstract class ApplyExtractFunctionTransformationIntention(
         if (selectedText != null) {
             /* invoke ExtractMethodHandler */
             val selectedElements = findSelectedPsiElements(editor, file)
-            val extractMethodProcessor = ExtractMethodProcessor(
-                project,
-                editor,
-                selectedElements,
-                null,
-                "Extract Method",
-                "newMethod",
-                null
-            )
+            val extractMethodProcessor = ExtractMethodHandler.getProcessor(project, selectedElements, file, false)
+            if (extractMethodProcessor == null) {
+                val x = 0
+                return
+            }
             extractMethodProcessor.methodName = "anotherMethodName"
+            extractMethodProcessor.setDataFromInputVariables()
+            extractMethodProcessor.setShowErrorDialogs(false)
+            extractMethodProcessor.setChainedConstructor(false)
+
+//            val extractMethodProcessor = ExtractMethodProcessor(
+//                project,
+//                editor,
+//                selectedElements,
+//                null,
+//                "Extract Method",
+//                "",
+//                "refactoring.extractMethod"
+//            )
+//            extractMethodProcessor.methodName = "anotherMethodName"
 
             try {
-//                 Perform the extraction
-                if (extractMethodProcessor.prepare()) {
-//                    ExtractMethodHandler.extractMethod(project, extractMethodProcessor)
-                    extractMethodProcessor.doRefactoring()
-                    val x = 0
+
+                ExtractMethodHandler.extractMethod(project, extractMethodProcessor)
+//                extractMethodProcessor.doRefactoring()
+                val x = 0
 //                    CommandProcessor.getInstance().executeCommand(project, {
 //                        ApplicationManager.getApplication().runWriteAction {
 //                            extractMethodProcessor.doRefactoring()
 //                        }
 //                    }, "Extract Method", null)
-                }
             } catch (e: PrepareFailedException) {
                 // Handle the error if the extraction is not possible
-                e.message?.let { showErrorHint(project, editor, it) }
+                e.message.let { showErrorHint(project, editor, it) }
             }
             catch (e: Exception) {
                 e.printStackTrace()
@@ -110,15 +118,16 @@ abstract class ApplyExtractFunctionTransformationIntention(
 
     }
 
+    private fun invokeEf2(efs: EFSuggestion, project: Project, editor: Editor?, file: PsiFile?) {
+        MyMethodExtractor.invokeOnElements(project, editor, file, findSelectedPsiElements(editor, file), FunctionNameProvider(efs.functionName))
+    }
+
     private fun performExtractFunction(project: Project, editor: Editor?, file: PsiFile?) {
         if (editor == null || file == null) return
-        val document = editor.document
         val selectionModel = editor.selectionModel
         val selectedText = selectionModel.selectedText
         if (selectedText != null) {
             /* invoke ExtractMethodHandler */
-            val selectedElements = findSelectedPsiElements(editor, file)
-
             val provider = LanguageRefactoringSupport.INSTANCE.forLanguage(JavaLanguage.INSTANCE)
             val refactoringActionHandler = provider.getExtractMethodHandler()
             val dataContext = (editor as EditorEx).dataContext
@@ -152,14 +161,16 @@ abstract class ApplyExtractFunctionTransformationIntention(
              * 3. Present suggestions to developer and let the developer choose
              * 4. Based on the developer's choice, automatic Extract Function should be performed
              */
-            invokeLlm(selectedText, project, editor, file, selectionModel)
+            invokeLlm(selectedText, project, editor, file)
         } else {
             val namedElement = getParentNamedElement(editor)
             if (namedElement != null) {
-                val queryText = namedElement.text
+                val codeSnippet = namedElement.text
                 val textRange = namedElement.textRange
                 selectionModel.setSelection(textRange.startOffset, textRange.endOffset)
-                invokeLlm(queryText, project, editor, file, selectionModel)
+                val startLineNumber = editor.document.getLineNumber(selectionModel.selectionStart)
+                val withLineNumbers = addLineNumbersToCodeSnippet(codeSnippet, startLineNumber)
+                invokeLlm(withLineNumbers, project, editor, file)
             } else {
                 selectionModel.selectLineAtCaret()
                 val textRange = getLineTextRange(document, editor)
@@ -168,22 +179,54 @@ abstract class ApplyExtractFunctionTransformationIntention(
         }
     }
 
-    private fun invokeLlm(text: String, project: Project, editor: Editor, file: PsiFile, selectionModel: SelectionModel) {
+    private fun addLineNumbersToCodeSnippet(codeSnippet: String, startIndex: Int): String {
+        val lines = codeSnippet.lines()
+        val numberedLines = lines.mapIndexed { index, line -> "${startIndex + index + 1}. $line" }
+        return numberedLines.joinToString("\n")
+    }
+
+    private fun extractJsonSubstring(input: String): String? {
+        val jsonPattern = "\\{[^{}]*}".toRegex()
+        val potentialJsonObjects = jsonPattern.findAll(input)
+        for (match in potentialJsonObjects){
+            val jsonString = match.value
+            try {
+                Json.parseToJsonElement(jsonString)
+                return jsonString
+            }
+            catch (e: SerializationException) {
+                // Ignoring invalid Json string
+            }
+        }
+
+        return null
+    }
+
+    private fun invokeLlm(text: String, project: Project, editor: Editor, file: PsiFile) {
         logger.info("Invoking LLM with text: $text")
-        val instruction = "Instruction for LLM goes here"
+        val messageList = mutableListOf<OpenAiChatMessage>(
+            OpenAiChatMessage("system", "You are a skilled Java software developer. You have immense knowledge on software refactoring."),
+            OpenAiChatMessage("user", "Provided the following Java function, where each line is prefixed with its line number: \n $text\nWhat would be your suggestion of splitting this function? The answer should be a Json with the following format: {“suggestions”: [{“new_function_name”: <new function name>, “line_start”: <line start>, “line_end”: <line end>}, …, ]}")
+        )
+
         val task = object : Task.Backgroundable(project, LLMBundle.message("intentions.request.extract.function.background.process.title")) {
                 override fun run(indicator: ProgressIndicator) {
-                    val response = sendEditRequest(
+                    val response = sendChatRequest(
                         project,
-                        text,
-                        instruction,
-                        llmRequestProvider = llmRequestProvider,
+                        messageList,
+                        llmRequestProvider.chatModel,
+                        llmRequestProvider
                     )
                     if (response != null) {
+                        logger.info("Full response:\n${response.toString()}")
                         response.getSuggestions().firstOrNull()?.let {
                             invokeLater {
-                                val efs: EFSuggestion = Json.decodeFromString(EFSuggestionSerializer, it.text)
-                                applySuggestion(efs, project, editor, file )
+                                val jsonText = extractJsonSubstring(it.text)
+                                if (jsonText != null) {
+                                    logger.info(jsonText)
+                                    val efs = Gson().fromJson(jsonText, EFSuggestion::class.java)
+                                    applySuggestion(efs, project, editor, file)
+                                }
                             }
                         }
                     }
@@ -194,7 +237,9 @@ abstract class ApplyExtractFunctionTransformationIntention(
 
     private fun applySuggestion(efSuggestion: EFSuggestion, project: Project, editor: Editor, file: PsiFile) {
         selectLines(efSuggestion.lineStart, efSuggestion.lineEnd, editor)
-        performExtractFunction(project, editor, file)
+//        performExtractFunction(project, editor, file)
+//        invokeEf1(project, editor, file)
+        invokeEf2(efSuggestion, project, editor, file)
     }
 
     private fun showErrorHint(project: Project, editor: Editor, message: String) {

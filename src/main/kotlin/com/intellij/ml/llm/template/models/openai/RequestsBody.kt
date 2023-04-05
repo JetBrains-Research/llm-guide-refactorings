@@ -4,30 +4,6 @@ import com.google.gson.annotations.SerializedName
 
 @Suppress("unused")
 /**
- * Documentation: https://beta.openai.com/docs/api-reference/edits
- */
-class OpenAiEditRequestBody(
-    @SerializedName("model")
-    val model: String,
-
-    @SerializedName("input")
-    val input: String,
-
-    @SerializedName("instruction")
-    val instruction: String,
-
-    @SerializedName("n")
-    val numberOfSuggestions: Int,
-
-    @SerializedName("temperature")
-    val temperature: Double,
-
-    @SerializedName("top_p")
-    val topP: Double,
-)
-
-@Suppress("unused")
-/**
  * Documentation: https://beta.openai.com/docs/api-reference/completions
  */
 class OpenAiCompletionRequestBody(
@@ -83,6 +59,30 @@ data class OpenAiChatMessage (
 
     @SerializedName("content")
     val content: String,
+)
+
+@Suppress("unused")
+/**
+ * Documentation: https://beta.openai.com/docs/api-reference/edits
+ */
+class OpenAiEditRequestBody(
+    @SerializedName("model")
+    val model: String,
+
+    @SerializedName("input")
+    val input: String,
+
+    @SerializedName("instruction")
+    val instruction: String,
+
+    @SerializedName("n")
+    val numberOfSuggestions: Int,
+
+    @SerializedName("temperature")
+    val temperature: Double,
+
+    @SerializedName("top_p")
+    val topP: Double,
 )
 
 @Suppress("unused")

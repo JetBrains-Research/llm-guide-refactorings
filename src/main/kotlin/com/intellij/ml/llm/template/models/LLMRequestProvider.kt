@@ -16,12 +16,18 @@ private const val GPT_COMPLETION_MODEL = "text-davinci-003"
 private const val GPT_EDIT_MODEL = "text-davinci-edit-001"
 
 private const val CHAT_GPT_3_5_TURBO = "gpt-3.5-turbo"
+private const val GPT_4 = "gpt-4"
 
 private val logger = Logger.getInstance("#com.intellij.ml.llm.template.models")
 
 val CodexRequestProvider = LLMRequestProvider(CODEX_COMPLETION_MODEL, CODEX_EDIT_MODEL, CHAT_GPT_3_5_TURBO)
 
+/*
+ * If you have access to GPT-4, use the following line:
+ * val GPTRequestProvider = LLMRequestProvider(GPT_COMPLETION_MODEL, GPT_EDIT_MODEL, GPT_4)
+ */
 val GPTRequestProvider = LLMRequestProvider(GPT_COMPLETION_MODEL, GPT_EDIT_MODEL, CHAT_GPT_3_5_TURBO)
+
 
 class LLMRequestProvider(
     val completionModel: String,

@@ -2,13 +2,16 @@ package com.intellij.ml.llm.template.intentions
 
 import com.google.gson.Gson
 import com.intellij.codeInsight.intention.IntentionAction
+import com.intellij.lang.java.JavaLanguage
 import com.intellij.ml.llm.template.LLMBundle
+import com.intellij.ml.llm.template.customextractors.MyInplaceExtractionHelper
 import com.intellij.ml.llm.template.models.*
 import com.intellij.ml.llm.template.prompts.fewShotExtractSuggestion
 import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
@@ -21,12 +24,15 @@ import com.intellij.psi.PsiNameIdentifierOwner
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.psi.util.PsiUtilBase
 import kotlinx.serialization.json.Json
+import org.jetbrains.kotlin.idea.KotlinLanguage
+import org.jetbrains.kotlin.idea.refactoring.introduce.extractFunction.ExtractKotlinFunctionHandler
 import org.jsoup.SerializationException
 
 
 @Suppress("UnstableApiUsage")
 abstract class ApplyExtractFunctionTransformationIntention(
-    private val llmRequestProvider: LLMRequestProvider = GPTRequestProvider
+    private val llmRequestProvider: LLMRequestProvider = GPTRequestProvider,
+    private val efLLMRequestProvider: LLMRequestProvider = GPTExtractFunctionRequestProvider
 ) : IntentionAction {
     private val logger = Logger.getInstance("#com.intellij.ml.llm")
 
@@ -63,9 +69,20 @@ abstract class ApplyExtractFunctionTransformationIntention(
     }
 
     private fun invokeExtractFunction(efs: EFSuggestion, project: Project, editor: Editor?, file: PsiFile?) {
-        MyMethodExtractor.invokeOnElements(
-            project, editor, file, findSelectedPsiElements(editor, file), FunctionNameProvider(efs.functionName)
-        )
+        val functionNameProvider = FunctionNameProvider(efs.functionName)
+        if (file?.language == JavaLanguage.INSTANCE) {
+            MyMethodExtractor.invokeOnElements(
+                project, editor, file, findSelectedPsiElements(editor, file), FunctionNameProvider(efs.functionName)
+            )
+        }
+        else if (file?.language == KotlinLanguage.INSTANCE) {
+            val dataContext = (editor as EditorEx).dataContext
+            val allContainersEnabled = false
+            val inplaceExtractionHelper = MyInplaceExtractionHelper(allContainersEnabled, functionNameProvider)
+            ExtractKotlinFunctionHandler(allContainersEnabled, inplaceExtractionHelper).invoke(
+                project, editor, file, dataContext
+            )
+        }
     }
 
     private fun selectLines(startLine: Int, endLine: Int, editor: Editor?) {
@@ -79,7 +96,6 @@ abstract class ApplyExtractFunctionTransformationIntention(
     override fun invoke(project: Project, editor: Editor?, file: PsiFile?) {
         if (editor == null || file == null) return
 
-        val document = editor.document
         val selectionModel = editor.selectionModel
         val selectedText = selectionModel.selectedText
         if (selectedText != null) {
@@ -103,10 +119,6 @@ abstract class ApplyExtractFunctionTransformationIntention(
                 val startLineNumber = editor.document.getLineNumber(selectionModel.selectionStart)
                 val withLineNumbers = addLineNumbersToCodeSnippet(codeSnippet, startLineNumber)
                 invokeLlm(withLineNumbers, project, editor, file)
-            } else {
-                selectionModel.selectLineAtCaret()
-                val textRange = getLineTextRange(document, editor)
-//                transform(project, document.getText(textRange), editor, textRange)
             }
         }
     }
@@ -142,7 +154,7 @@ abstract class ApplyExtractFunctionTransformationIntention(
         ) {
             override fun run(indicator: ProgressIndicator) {
                 val response = sendChatRequest(
-                    project, messageList, llmRequestProvider.chatModel, llmRequestProvider
+                    project, messageList, efLLMRequestProvider.chatModel, efLLMRequestProvider
                 )
                 if (response != null) {
                     logger.info("Full response:\n${response.toString()}")

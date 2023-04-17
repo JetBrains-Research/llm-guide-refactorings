@@ -27,9 +27,10 @@ val CodexRequestProvider = LLMRequestProvider(CODEX_COMPLETION_MODEL, CODEX_EDIT
  * val GPTRequestProvider = LLMRequestProvider(GPT_COMPLETION_MODEL, GPT_EDIT_MODEL, GPT_4)
  */
 val GPTRequestProvider = LLMRequestProvider(GPT_COMPLETION_MODEL, GPT_EDIT_MODEL, CHAT_GPT_3_5_TURBO)
+val GPTExtractFunctionRequestProvider = ExtractFunctionLLMRequestProvider(GPT_COMPLETION_MODEL, GPT_EDIT_MODEL, CHAT_GPT_3_5_TURBO)
 
 
-class LLMRequestProvider(
+open class LLMRequestProvider(
     val completionModel: String,
     val editModel: String,
     val chatModel: String,
@@ -61,7 +62,7 @@ class LLMRequestProvider(
         return OpenAIEditRequest(body)
     }
 
-    fun createChatGPTRequest(
+    open fun createChatGPTRequest(
         body: OpenAiChatRequestBody,
     ): LLMBaseRequest<*> {
         if (Registry.`is`("llm.for.code.enable.mock.requests")) {
@@ -75,6 +76,7 @@ class LLMRequestProvider(
 
         return OpenAIChatRequest(body)
     }
+
 
     fun createCompletionRequest(
         input: String,
@@ -128,5 +130,26 @@ class LLMRequestProvider(
                     "maxTokens=$maxTokens, temperature=$temperature, topP=$topP, suggestions=$numberOfSuggestions"
         )
         return OpenAICompletionRequest(body)
+    }
+}
+
+
+class ExtractFunctionLLMRequestProvider(completionModel: String, editModel: String, chatModel: String) :
+    LLMRequestProvider(completionModel, editModel, chatModel) {
+
+
+    override fun createChatGPTRequest(
+        body: OpenAiChatRequestBody,
+    ): LLMBaseRequest<*> {
+        if (Registry.`is`("llm.for.code.enable.mock.requests")) {
+            logger.info("Emulating request to the API to test response presentation")
+            return MockExtractFunctionRequest()
+        }
+
+        logger.info(
+            "Sending request to OpenAI API with model=$chatModel and messages=${body.messages}"
+        )
+
+        return OpenAIChatRequest(body)
     }
 }

@@ -34,7 +34,7 @@ fun fewShotExtractSuggestion(methodCode: String) = mutableListOf(
                 16.
                 17.  return dist
                 18.  }
-                """
+                """.trimIndent()
     ),
     OpenAiChatMessage(
         "assistant",
@@ -42,7 +42,7 @@ fun fewShotExtractSuggestion(methodCode: String) = mutableListOf(
                 [
                 {"function_name":  "floydWarshallUpdate", "line_start":  5, "line_end": 15}
                 ]
-                """
+                """.trimIndent()
     ),
     OpenAiChatMessage(
         "user",

@@ -3,11 +3,18 @@ import org.jetbrains.changelog.markdownToHTML
 
 fun properties(key: String) = project.findProperty(key).toString()
 
+dependencies {
+    implementation("org.junit.jupiter:junit-jupiter:5.8.1")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.mongodb:mongodb-driver-sync:4.9.0") // added this line for MongoDB driver
+    implementation(kotlin("stdlib-jdk8"))
+}
+
 plugins {
     id("java")
-    id("org.jetbrains.kotlin.jvm") version "1.8.0"
     id("org.jetbrains.changelog") version "2.0.0"
     id("org.jetbrains.intellij") version "1.12.0"
+    kotlin("jvm") version "1.8.21"
 }
 
 group = properties("pluginGroup")

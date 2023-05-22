@@ -1,32 +1,29 @@
 package com.intellij.ml.llm.template.intentions
 
-import com.google.gson.Gson
 import com.intellij.codeInsight.intention.IntentionAction
-import com.intellij.lang.java.JavaLanguage
 import com.intellij.ml.llm.template.LLMBundle
-import com.intellij.ml.llm.template.customextractors.MyInplaceExtractionHelper
-import com.intellij.ml.llm.template.models.*
+import com.intellij.ml.llm.template.extractfunction.EFCandidate
+import com.intellij.ml.llm.template.models.GPTExtractFunctionRequestProvider
+import com.intellij.ml.llm.template.models.GPTRequestProvider
+import com.intellij.ml.llm.template.models.LLMRequestProvider
+import com.intellij.ml.llm.template.models.sendChatRequest
 import com.intellij.ml.llm.template.prompts.fewShotExtractSuggestion
+import com.intellij.ml.llm.template.utils.CodeTransformer
+import com.intellij.ml.llm.template.utils.EFCandidateFactory
+import com.intellij.ml.llm.template.utils.addLineNumbersToCodeSnippet
+import com.intellij.ml.llm.template.utils.identifyExtractFunctionSuggestions
 import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.diagnostic.Logger
-import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
-import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.progress.impl.BackgroundableProcessIndicator
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.util.TextRange
-import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiNameIdentifierOwner
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.psi.util.PsiUtilBase
-import kotlinx.serialization.json.Json
-import org.jetbrains.kotlin.idea.KotlinLanguage
-import org.jetbrains.kotlin.idea.refactoring.introduce.extractFunction.ExtractKotlinFunctionHandler
-import org.jsoup.SerializationException
 
 
 @Suppress("UnstableApiUsage")
@@ -35,62 +32,12 @@ abstract class ApplyExtractFunctionTransformationIntention(
     private val efLLMRequestProvider: LLMRequestProvider = GPTExtractFunctionRequestProvider
 ) : IntentionAction {
     private val logger = Logger.getInstance("#com.intellij.ml.llm")
+    private val codeTransformer = CodeTransformer()
 
     override fun getFamilyName(): String = LLMBundle.message("intentions.apply.transformation.family.name")
 
     override fun isAvailable(project: Project, editor: Editor?, file: PsiFile?): Boolean {
         return editor != null && file != null
-    }
-
-    private fun findSelectedPsiElements(editor: Editor?, file: PsiFile?): Array<PsiElement> {
-        if (editor == null) {
-            return emptyArray()
-        }
-        val selectionModel = editor.selectionModel
-        val startOffset = selectionModel.selectionStart
-        val endOffset = selectionModel.selectionEnd
-
-        val startElement = file?.findElementAt(startOffset)
-        val endElement = file?.findElementAt(if (endOffset > 0) endOffset - 1 else endOffset)
-
-        if (startElement == null || endElement == null) {
-            return emptyArray()
-        }
-
-        val commonParent = PsiTreeUtil.findCommonParent(startElement, endElement)
-        if (commonParent == null) {
-            return emptyArray()
-        }
-
-        val selectedElements = PsiTreeUtil.findChildrenOfType(commonParent, PsiElement::class.java)
-        return selectedElements.filter {
-            it.textRange.startOffset >= startOffset && it.textRange.endOffset <= endOffset
-        }.toTypedArray()
-    }
-
-    private fun invokeExtractFunction(efs: EFSuggestion, project: Project, editor: Editor?, file: PsiFile?) {
-        val functionNameProvider = FunctionNameProvider(efs.functionName)
-        if (file?.language == JavaLanguage.INSTANCE) {
-            MyMethodExtractor.invokeOnElements(
-                project, editor, file, findSelectedPsiElements(editor, file), FunctionNameProvider(efs.functionName)
-            )
-        }
-        else if (file?.language == KotlinLanguage.INSTANCE) {
-            val dataContext = (editor as EditorEx).dataContext
-            val allContainersEnabled = false
-            val inplaceExtractionHelper = MyInplaceExtractionHelper(allContainersEnabled, functionNameProvider)
-            ExtractKotlinFunctionHandler(allContainersEnabled, inplaceExtractionHelper).invoke(
-                project, editor, file, dataContext
-            )
-        }
-    }
-
-    private fun selectLines(startLine: Int, endLine: Int, editor: Editor?) {
-        if (editor == null || editor.document == null) return
-        val selectionModel = editor.selectionModel
-        selectionModel.setSelection(
-            editor.document.getLineStartOffset(startLine), editor.document.getLineEndOffset(endLine)
-        )
     }
 
     override fun invoke(project: Project, editor: Editor?, file: PsiFile?) {
@@ -123,28 +70,6 @@ abstract class ApplyExtractFunctionTransformationIntention(
         }
     }
 
-    private fun addLineNumbersToCodeSnippet(codeSnippet: String, startIndex: Int): String {
-        val lines = codeSnippet.lines()
-        val numberedLines = lines.mapIndexed { index, line -> "${startIndex + index}. $line" }
-        return numberedLines.joinToString("\n")
-    }
-
-    private fun extractJsonSubstring(input: String): String? {
-        val jsonPattern = "\\{[^{}]*}".toRegex()
-        val potentialJsonObjects = jsonPattern.findAll(input)
-        for (match in potentialJsonObjects) {
-            val jsonString = match.value
-            try {
-                Json.parseToJsonElement(jsonString)
-                return jsonString
-            } catch (e: SerializationException) {
-                // Ignoring invalid Json string
-            }
-        }
-
-        return null
-    }
-
     private fun invokeLlm(text: String, project: Project, editor: Editor, file: PsiFile) {
         logger.info("Invoking LLM with text: $text")
         val messageList = fewShotExtractSuggestion(text)
@@ -157,14 +82,16 @@ abstract class ApplyExtractFunctionTransformationIntention(
                     project, messageList, efLLMRequestProvider.chatModel, efLLMRequestProvider
                 )
                 if (response != null) {
-                    logger.info("Full response:\n${response.toString()}")
-                    response.getSuggestions().firstOrNull()?.let {
-                        invokeLater {
-                            val jsonText = extractJsonSubstring(it.text)
-                            if (jsonText != null) {
-                                logger.info(jsonText)
-                                val efs = Gson().fromJson(jsonText, EFSuggestion::class.java)
-                                applySuggestion(efs, project, editor, file)
+                    invokeLater {
+                        val efCandidateFactory = EFCandidateFactory()
+                        response.getSuggestions().forEach { suggestion ->
+                            val efSuggestionList = identifyExtractFunctionSuggestions(suggestion.text)
+                            val efCandidates = ArrayList<EFCandidate>()
+                            efSuggestionList.suggestion_list.forEach{ efs ->
+                                efCandidates.addAll(efCandidateFactory.buildCandidates(efs, editor, file))
+                            }
+                            efCandidates.take(1).forEach { candidate ->
+                                codeTransformer.applyCandidate(candidate, project, editor, file)
                             }
                         }
                     }
@@ -172,18 +99,6 @@ abstract class ApplyExtractFunctionTransformationIntention(
             }
         }
         ProgressManager.getInstance().runProcessWithProgressAsynchronously(task, BackgroundableProcessIndicator(task))
-    }
-
-    private fun applySuggestion(efSuggestion: EFSuggestion, project: Project, editor: Editor, file: PsiFile) {
-        selectLines(efSuggestion.lineStart, efSuggestion.lineEnd, editor)
-        invokeExtractFunction(efSuggestion, project, editor, file)
-    }
-
-    private fun getLineTextRange(document: Document, editor: Editor): TextRange {
-        val lineNumber = document.getLineNumber(editor.caretModel.offset)
-        val startOffset = document.getLineStartOffset(lineNumber)
-        val endOffset = document.getLineEndOffset(lineNumber)
-        return TextRange.create(startOffset, endOffset)
     }
 
     private fun getParentNamedElement(editor: Editor): PsiNameIdentifierOwner? {

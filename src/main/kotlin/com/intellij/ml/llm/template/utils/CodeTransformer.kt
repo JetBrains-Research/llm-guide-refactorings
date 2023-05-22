@@ -67,7 +67,6 @@ class CodeTransformer : Observable {
                     project, editor, file, dataContext
                 )
             }
-
         }
     }
 

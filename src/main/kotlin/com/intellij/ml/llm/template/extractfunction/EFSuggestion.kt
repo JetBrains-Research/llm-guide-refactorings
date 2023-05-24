@@ -4,7 +4,7 @@ import com.google.gson.annotations.SerializedName
 
 data class EFSuggestionList (
     @SerializedName("suggestion_list")
-    val suggestion_list: List<EFSuggestion>
+    val suggestionList: List<EFSuggestion>
 )
 
 data class EFSuggestion(

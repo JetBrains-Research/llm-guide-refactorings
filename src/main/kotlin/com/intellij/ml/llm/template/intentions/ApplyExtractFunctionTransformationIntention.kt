@@ -87,7 +87,7 @@ abstract class ApplyExtractFunctionTransformationIntention(
                         response.getSuggestions().forEach { suggestion ->
                             val efSuggestionList = identifyExtractFunctionSuggestions(suggestion.text)
                             val efCandidates = ArrayList<EFCandidate>()
-                            efSuggestionList.suggestion_list.forEach{ efs ->
+                            efSuggestionList.suggestionList.forEach{ efs ->
                                 efCandidates.addAll(efCandidateFactory.buildCandidates(efs, editor, file))
                             }
                             efCandidates.take(1).forEach { candidate ->

@@ -32,36 +32,36 @@ class UtilsTest : BasePlatformTestCase() {
             """.trimIndent()
         val efSuggestionList = identifyExtractFunctionSuggestions(input)
 
-        TestCase.assertEquals(6, efSuggestionList.suggestion_list.size)
-        TestCase.assertEquals("createRebalanceConfig", efSuggestionList.suggestion_list.get(0).functionName)
+        TestCase.assertEquals(6, efSuggestionList.suggestionList.size)
+        TestCase.assertEquals("createRebalanceConfig", efSuggestionList.suggestionList.get(0).functionName)
         TestCase.assertEquals(
             2650 to 2656,
-            efSuggestionList.suggestion_list.get(0).lineStart to efSuggestionList.suggestion_list.get(0).lineEnd
+            efSuggestionList.suggestionList.get(0).lineStart to efSuggestionList.suggestionList.get(0).lineEnd
         )
-        TestCase.assertEquals("createConsumerCoordinator", efSuggestionList.suggestion_list.get(1).functionName)
+        TestCase.assertEquals("createConsumerCoordinator", efSuggestionList.suggestionList.get(1).functionName)
         TestCase.assertEquals(
             2649 to 2670,
-            efSuggestionList.suggestion_list.get(1).lineStart to efSuggestionList.suggestion_list.get(1).lineEnd
+            efSuggestionList.suggestionList.get(1).lineStart to efSuggestionList.suggestionList.get(1).lineEnd
         )
-        TestCase.assertEquals("createFetchConfig", efSuggestionList.suggestion_list.get(2).functionName)
+        TestCase.assertEquals("createFetchConfig", efSuggestionList.suggestionList.get(2).functionName)
         TestCase.assertEquals(
             2674 to 2684,
-            efSuggestionList.suggestion_list.get(2).lineStart to efSuggestionList.suggestion_list.get(2).lineEnd
+            efSuggestionList.suggestionList.get(2).lineStart to efSuggestionList.suggestionList.get(2).lineEnd
         )
-        TestCase.assertEquals("createFetcher", efSuggestionList.suggestion_list.get(3).functionName)
+        TestCase.assertEquals("createFetcher", efSuggestionList.suggestionList.get(3).functionName)
         TestCase.assertEquals(
             2685 to 2692,
-            efSuggestionList.suggestion_list.get(3).lineStart to efSuggestionList.suggestion_list.get(3).lineEnd
+            efSuggestionList.suggestionList.get(3).lineStart to efSuggestionList.suggestionList.get(3).lineEnd
         )
-        TestCase.assertEquals("createOffsetFetcher", efSuggestionList.suggestion_list.get(4).functionName)
+        TestCase.assertEquals("createOffsetFetcher", efSuggestionList.suggestionList.get(4).functionName)
         TestCase.assertEquals(
             2693 to 2701,
-            efSuggestionList.suggestion_list.get(4).lineStart to efSuggestionList.suggestion_list.get(4).lineEnd
+            efSuggestionList.suggestionList.get(4).lineStart to efSuggestionList.suggestionList.get(4).lineEnd
         )
-        TestCase.assertEquals("createTopicMetadataFetcher", efSuggestionList.suggestion_list.get(5).functionName)
+        TestCase.assertEquals("createTopicMetadataFetcher", efSuggestionList.suggestionList.get(5).functionName)
         TestCase.assertEquals(
             2702 to 2703,
-            efSuggestionList.suggestion_list.get(5).lineStart to efSuggestionList.suggestion_list.get(5).lineEnd
+            efSuggestionList.suggestionList.get(5).lineStart to efSuggestionList.suggestionList.get(5).lineEnd
         )
     }
 
@@ -72,7 +72,7 @@ class UtilsTest : BasePlatformTestCase() {
 
         val efSuggestionList = identifyExtractFunctionSuggestions(input)
 
-        TestCase.assertEquals(0, efSuggestionList.suggestion_list.size)
+        TestCase.assertEquals(0, efSuggestionList.suggestionList.size)
     }
 
     fun `test replace github url line range`() {

@@ -15,6 +15,39 @@ fun replaceGithubUrlLineRange(githubUrl: String, lineStart: Int, lineEnd: Int): 
     return String.format("${githubUrl.substringBefore("#")}#$newLineRange")
 }
 
+
+/**
+ * This function will extract the suggestions from a ChatGPT output.
+ * ChatGPT output may contain a mix of text (i.e. sentences) and code and Json.
+ * The output is not always clean and this function is meant to identify the extract function suggestions
+ *
+ * Example of ChatGPT reply can be:
+ *            I would suggest the following extract method refactorings:
+ *
+ *             1. Extract method for creating `GroupRebalanceConfig` object from lines 2650-2656.
+ *             2. Extract method for creating `ConsumerCoordinator` object from lines 2649-2670.
+ *             3. Extract method for creating `FetchConfig` object from lines 2674-2684.
+ *             4. Extract method for creating `Fetcher` object from lines 2685-2692.
+ *             5. Extract method for creating `OffsetFetcher` object from lines 2693-2701.
+ *             6. Extract method for creating `TopicMetadataFetcher` object from lines 2702-2703.
+ *
+ *             The JSON object for these extract method refactorings would be:
+ *
+ *             ```
+ *             [
+ *                 {"function_name": "createRebalanceConfig", "line_start": 2650, "line_end": 2656},
+ *                 {"function_name": "createConsumerCoordinator", "line_start": 2649, "line_end": 2670},
+ *                 {"function_name": "createFetchConfig", "line_start": 2674, "line_end": 2684},
+ *                 {"function_name": "createFetcher", "line_start": 2685, "line_end": 2692},
+ *                 {"function_name": "createOffsetFetcher", "line_start": 2693, "line_end": 2701},
+ *                 {"function_name": "createTopicMetadataFetcher", "line_start": 2702, "line_end": 2703}
+ *             ]
+ *             ```
+ *
+ * Another example may be:
+ *             "The above function does not have any extract method opportunities."
+ *
+ */
 fun identifyExtractFunctionSuggestions(input: String): EFSuggestionList {
     val regex = """\{"function_name":\s*"([^"]+)",\s*"line_start":\s*(\d+),\s*"line_end":\s*(\d+)\}""".toRegex()
     val matches = regex.findAll(input)

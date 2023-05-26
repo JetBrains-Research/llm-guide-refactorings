@@ -28,8 +28,8 @@ class EFCandidateFactory {
     }
 
     private fun buildCandidateAsIs(efSuggestion: EFSuggestion, editor: Editor, file: PsiFile): EFCandidate? {
-        val psiElementStart = getLeftmostPsiElement(efSuggestion.lineStart, editor, file)
-        val psiElementEnd = getLeftmostPsiElement(efSuggestion.lineEnd, editor, file)
+        val psiElementStart = getLeftmostPsiElement(efSuggestion.lineStart - 1, editor, file)
+        val psiElementEnd = getLeftmostPsiElement(efSuggestion.lineEnd - 1, editor, file)
         if (psiElementStart == null || psiElementEnd == null) {
             return null
         }
@@ -47,8 +47,8 @@ class EFCandidateFactory {
     }
 
     private fun buildCandidateWithAdjustment(efSuggestion: EFSuggestion, editor: Editor, file: PsiFile): EFCandidate? {
-        val psiElementStart = getLeftmostPsiElement(efSuggestion.lineStart, editor, file)
-        val psiElementEnd = getLeftmostPsiElement(efSuggestion.lineEnd, editor, file)
+        val psiElementStart = getLeftmostPsiElement(efSuggestion.lineStart - 1, editor, file)
+        val psiElementEnd = getLeftmostPsiElement(efSuggestion.lineEnd - 1, editor, file)
 
         if (psiElementStart == null || psiElementEnd == null) {
             return null
@@ -70,6 +70,15 @@ class EFCandidateFactory {
 
     /**
      * Selected region is adjusted by enlarging it to the top-most PsiElement, either start or end
+     *
+     * Example:
+     * 10. if (x == 0) {
+     * 11.  println(x)
+     * 12.  some more statements
+     * 13.  more statements
+     * 14. }
+     *
+     * If the selection has lines 10-13 (included), then it will enlarge the selection to lines 10-14 (included)
      */
     private fun adjustRegion(psiElementStart: PsiElement, psiElementEnd: PsiElement): Pair<PsiElement, PsiElement>? {
         var commonParent = PsiTreeUtil.findCommonParent(psiElementStart, psiElementEnd)
@@ -108,19 +117,21 @@ class EFCandidateFactory {
     private fun getLeftmostPsiElement(lineNumber: Int, editor: Editor, file: PsiFile): PsiElement? {
         // get the PsiElement on the given lineNumber
         var psiElement = file.findElementAt(editor.document.getLineStartOffset(lineNumber)) ?: return null
+        var psiElementEndOffset = file.findElementAt(editor.document.getLineEndOffset(lineNumber)) ?: return null
 
         // if there are multiple sibling PsiElements on the same line, look for the first one
-        while (psiElement.getLineNumber(true) == psiElement.prevSibling?.getLineNumber(true)) {
+        while (psiElement.getLineNumber(false) == psiElement.prevSibling?.getLineNumber(false)) {
             psiElement = psiElement.prevSibling
         }
 
         // if there are multiple parent PsiElements on the same line, look for the top one
-        while (psiElement.getLineNumber(true) == psiElement.parent?.getLineNumber(true)) {
+        while (psiElement.getLineNumber(false) == psiElement.parent?.getLineNumber(false)) {
             psiElement = psiElement.parent
         }
 
-        if (psiElement is PsiWhiteSpace) {
-            psiElement = psiElement.prevSibling
+        // move to next non-white space sibling
+        while (psiElement is PsiWhiteSpace) {
+            psiElement = psiElement.nextSibling
         }
 
         return psiElement

@@ -1,7 +1,20 @@
 package com.intellij.ml.llm.template.utils
 
+import com.intellij.lang.java.JavaLanguage
+import com.intellij.ml.llm.template.extractfunction.EFCandidate
 import com.intellij.ml.llm.template.extractfunction.EFSuggestion
 import com.intellij.ml.llm.template.extractfunction.EFSuggestionList
+import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.editor.Editor
+import com.intellij.psi.PsiFile
+import com.intellij.refactoring.extractMethod.newImpl.ExtractMethodHelper
+import com.intellij.refactoring.extractMethod.newImpl.ExtractMethodPipeline.findAllOptionsToExtract
+import com.intellij.refactoring.extractMethod.newImpl.ExtractSelector
+import com.intellij.refactoring.extractMethod.newImpl.structures.ExtractOptions
+import org.jetbrains.kotlin.idea.KotlinLanguage
+import org.jetbrains.kotlin.idea.refactoring.introduce.extractFunction.ExtractKotlinFunctionHandler
+import org.jetbrains.kotlin.psi.KtFile
+
 
 fun addLineNumbersToCodeSnippet(codeSnippet: String, startIndex: Int): String {
     val lines = codeSnippet.lines()
@@ -63,4 +76,59 @@ fun identifyExtractFunctionSuggestions(input: String): EFSuggestionList {
     }
 
     return EFSuggestionList(efSuggestions)
+}
+
+
+fun isCandidateExtractable(efCandidate: EFCandidate, editor: Editor, file: PsiFile): Boolean {
+    editor.selectionModel.setSelection(efCandidate.offsetStart, efCandidate.offsetEnd)
+    when(file.language) {
+        JavaLanguage.INSTANCE -> return isFunctionExtractableJava(editor, file)
+        KotlinLanguage.INSTANCE -> return isSelectionExtractableKotlin(editor, file)
+    }
+    return false
+}
+
+private fun isFunctionExtractableJava(
+    editor: Editor,
+    file: PsiFile
+): Boolean {
+    val range = ExtractMethodHelper.findEditorSelection(editor)
+    val elements = ExtractSelector().suggestElementsToExtract(file, range!!)
+
+    if (elements == null || elements.isEmpty()) {
+        return false
+    }
+
+    var allOptionsToExtract = emptyList<ExtractOptions>()
+
+    try {
+        allOptionsToExtract = findAllOptionsToExtract(elements)
+    } catch (e: Exception) {
+        logException(e)
+    }
+    return allOptionsToExtract.isNotEmpty()
+}
+
+private fun isSelectionExtractableKotlin(
+    editor: Editor,
+    file: PsiFile
+): Boolean {
+    var res = false
+    val efKotlinHandler = ExtractKotlinFunctionHandler()
+    if (file !is KtFile) return false
+    try {
+        efKotlinHandler.selectElements(editor, file) { elements, _ ->
+            res = elements.isNotEmpty()
+        }
+    } catch (e: Exception) {
+        logException(e)
+        res = false
+    }
+    return res
+}
+
+private fun logException(e: Exception) {
+    val logger = Logger.getInstance("#com.intellij.ml.llm")
+    val lineNumber = e.stackTrace.firstOrNull()?.lineNumber
+    logger.info("Utils.kt:$lineNumber", e)
 }

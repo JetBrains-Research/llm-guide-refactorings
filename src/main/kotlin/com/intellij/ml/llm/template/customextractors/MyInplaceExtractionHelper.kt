@@ -19,7 +19,7 @@ import com.intellij.refactoring.RefactoringBundle
 import com.intellij.refactoring.extractMethod.newImpl.inplace.EditorState
 import com.intellij.refactoring.extractMethod.newImpl.inplace.ExtractMethodTemplateBuilder
 import com.intellij.refactoring.extractMethod.newImpl.inplace.InplaceExtractUtils
-import com.intellij.refactoring.util.CommonRefactoringUtil
+import com.intellij.refactoring.extractMethod.newImpl.inplace.TemplateField
 import org.jetbrains.annotations.Nls
 import org.jetbrains.kotlin.idea.caches.resolve.resolveToCall
 import org.jetbrains.kotlin.idea.refactoring.KotlinNamesValidator
@@ -71,8 +71,17 @@ class MyInplaceExtractionHelper(private val allContainersEnabled: Boolean, priva
             val callOffset = callIdentifier.textRange.endOffset
             val preview = InplaceExtractUtils.createPreview(editor, methodRange, methodOffset, callRange, callOffset)
             Disposer.register(disposable, preview)
-            ExtractMethodTemplateBuilder(editor, EXTRACT_FUNCTION)
+            val templateField = TemplateField(callIdentifier.textRange, listOf(methodIdentifier.textRange))
                 .withCompletionNames(descriptor.suggestedNames)
+                .withCompletionHint(getDialogAdvertisement())
+                .withValidation { variableRange ->
+                    val error = getIdentifierError(file, variableRange)
+                    if (error != null) {
+                        InplaceExtractUtils.showErrorHint(editor, variableRange.endOffset, error)
+                    }
+                    error == null
+                }
+            ExtractMethodTemplateBuilder(editor, EXTRACT_FUNCTION)
                 .enableRestartForHandler(ExtractKotlinFunctionHandler::class.java)
                 .onBroken {
                     editorState.revert()
@@ -80,16 +89,8 @@ class MyInplaceExtractionHelper(private val allContainersEnabled: Boolean, priva
                 .onSuccess {
                     processDuplicates(extraction.duplicateReplacers, file.project, editor)
                 }
-                .withCompletionAdvertisement(getDialogAdvertisement())
-                .withValidation { variableRange ->
-                    val error = getIdentifierError(file, variableRange)
-                    if (error != null) {
-                        CommonRefactoringUtil.showErrorHint(project, editor, error, EXTRACT_FUNCTION, null)
-                    }
-                    error == null
-                }
                 .disposeWithTemplate(disposable)
-                .createTemplate(file, methodIdentifier.textRange, callIdentifier.textRange)
+                .createTemplate(file, listOf(templateField))
             onFinish(extraction)
         }
         try {
@@ -127,7 +128,7 @@ class MyInplaceExtractionHelper(private val allContainersEnabled: Boolean, priva
         val call = PsiTreeUtil.findElementOfClassAtOffset(file, variableRange.startOffset, KtCallExpression::class.java, false)
         val name = file.viewProvider.document.getText(variableRange)
         return if (! KotlinNamesValidator().isIdentifier(name, file.project)) {
-            JavaRefactoringBundle.message("extract.method.error.invalid.name")
+            JavaRefactoringBundle.message("template.error.invalid.identifier.name")
         } else if (call?.resolveToCall() == null) {
             JavaRefactoringBundle.message("extract.method.error.method.conflict")
         } else {

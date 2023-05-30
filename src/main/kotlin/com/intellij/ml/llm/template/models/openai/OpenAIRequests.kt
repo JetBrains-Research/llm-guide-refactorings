@@ -3,6 +3,7 @@ package com.intellij.ml.llm.template.models.openai
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.intellij.ml.llm.template.models.LLMBaseRequest
+import com.intellij.openapi.diagnostic.Logger
 import com.intellij.util.io.HttpRequests
 import org.jetbrains.kotlin.idea.debugger.coroutine.util.logger
 import java.net.HttpURLConnection
@@ -26,6 +27,7 @@ open class OpenAIBaseRequest<Body>(path: String, body: Body) : LLMBaseRequest<Bo
                 val responseCode = (request.connection as HttpURLConnection).responseCode
                 if (responseCode == HttpURLConnection.HTTP_OK) {
                     val response = request.readString()
+                    Logger.getInstance("#com.intellij.ml.llm").info("Raw response:\n${response}")
                     Gson().fromJson(response, OpenAIChatResponse::class.java)
                 } else {
                     null

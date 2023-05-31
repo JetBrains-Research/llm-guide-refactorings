@@ -5,6 +5,7 @@ import com.intellij.ml.llm.template.extractfunction.EFSuggestion
 import com.intellij.ml.llm.template.extractfunction.EfCandidateType
 import com.intellij.ml.llm.template.utils.CodeTransformer
 import com.intellij.ml.llm.template.utils.EFCandidateFactory
+import com.intellij.ml.llm.template.utils.isCandidateExtractable
 import com.intellij.testFramework.LightPlatformCodeInsightTestCase
 import junit.framework.TestCase
 
@@ -91,8 +92,8 @@ class EFCandidateFactoryTest : LightPlatformCodeInsightTestCase() {
         )
         val efs2 = EFSuggestion(
             functionName = "fooBar",
-            lineStart = 2,
-            lineEnd = 2
+            lineStart = 1,
+            lineEnd = 1
         )
         val candidateFactory = EFCandidateFactory()
         val efCandidates = ArrayList<EFCandidate>()
@@ -150,5 +151,97 @@ class EFCandidateFactoryTest : LightPlatformCodeInsightTestCase() {
             TestCase.assertTrue(candidates.contains(expectedCandidate))
             TestCase.assertEquals(expectedCandidate.type, candidates.get(candidates.indexOf(expectedCandidate)).type)
         }
+    }
+
+    fun `test candidate is extractable in java code`() {
+        configureByFile("/testdata/KafkaAdminClientTest.java")
+        val efs = EFSuggestion(
+            functionName = "createPartitionMetadata",
+            lineStart = 113,
+            lineEnd = 120
+        )
+        val candidates = EFCandidateFactory().buildCandidates(efs, editor, file).toTypedArray()
+        TestCase.assertEquals(1, candidates.size)
+        TestCase.assertTrue(isCandidateExtractable(candidates.get(0), editor, file))
+    }
+
+    fun `test candidate is not extractable in Java code`() {
+        configureByFile("/testdata/KafkaAdminClientTest.java")
+        val efs = EFSuggestion(
+            functionName = "createPartitionMetadata",
+            lineStart = 113,
+            lineEnd = 119
+        )
+        val candidates = EFCandidateFactory().buildCandidates(efs, editor, file).toTypedArray()
+            .filter { it.type == EfCandidateType.AS_IS }
+        TestCase.assertEquals(1, candidates.size)
+        TestCase.assertFalse(isCandidateExtractable(candidates.get(0), editor, file))
+    }
+
+    fun `test multiple assignment selection in Java code`() {
+        configureByFile("/testdata/KafkaAdminClientTest.java")
+        com.intellij.openapi.util.registry.Registry.get("refactorings.extract.method.introduce.object").setValue(false)
+        val efs = EFSuggestion(
+            functionName = "createPartitionMetadata",
+            lineStart = 18,
+            lineEnd = 22
+        )
+
+        var candidates = EFCandidateFactory().buildCandidates(efs, editor, file).toTypedArray()
+        TestCase.assertEquals(1, candidates.size)
+        candidates = candidates.filter { it.type == EfCandidateType.AS_IS }.toTypedArray()
+        TestCase.assertEquals(1, candidates.size)
+        TestCase.assertFalse(isCandidateExtractable(candidates.get(0), editor, file))
+    }
+
+    fun `test entire function is not extractable in Java code`() {
+        configureByFile("/testdata/KafkaAdminClientTest.java")
+        com.intellij.openapi.util.registry.Registry.get("refactorings.extract.method.introduce.object").setValue(true)
+        val efs = EFSuggestion(
+            functionName = "createPartitionMetadata",
+            lineStart = 5,
+            lineEnd = 122
+        )
+
+        val candidates = EFCandidateFactory().buildCandidates(efs, editor, file).toTypedArray()
+            .filter { it.type == EfCandidateType.AS_IS && isCandidateExtractable(it, editor, file) }
+        TestCase.assertEquals(0, candidates.size)
+    }
+
+    fun `test candidate is extractable in Kotlin code`() {
+        configureByFile("/testdata/RodCuttingProblem.kt")
+        val efs = EFSuggestion(
+            functionName = "createPartitionMetadata",
+            lineStart = 12,
+            lineEnd = 17
+        )
+        val candidates = EFCandidateFactory().buildCandidates(efs, editor, file).toTypedArray()
+            .filter { it.type == EfCandidateType.AS_IS && isCandidateExtractable(it, editor, file) }
+        TestCase.assertEquals(1, candidates.size)
+    }
+
+    fun `test candidate is not extractable in Kotlin code`() {
+        configureByFile("/testdata/RodCuttingProblem.kt")
+        val efs = EFSuggestion(
+            functionName = "createPartitionMetadata",
+            lineStart = 12,
+            lineEnd = 16
+        )
+        val candidates = EFCandidateFactory().buildCandidates(efs, editor, file).toTypedArray()
+            .filter { it.type == EfCandidateType.AS_IS && isCandidateExtractable(it, editor, file) }
+        TestCase.assertEquals(0, candidates.size)
+    }
+
+    fun `test entire function is not extractable in Kotlin code`() {
+        configureByFile("/testdata/RodCuttingProblem.kt")
+        val efs = EFSuggestion(
+            functionName = "createPartitionMetadata",
+            lineStart = 8,
+            lineEnd = 18
+        )
+        val candidates = EFCandidateFactory().buildCandidates(efs, editor, file).toTypedArray()
+            .filter { it.type == EfCandidateType.AS_IS && isCandidateExtractable(it, editor, file) }
+        println(editor.selectionModel.selectedText)
+        TestCase.assertEquals(0, candidates.size)
     }
 }

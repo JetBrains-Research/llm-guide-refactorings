@@ -36,10 +36,7 @@ import com.intellij.refactoring.extractMethod.newImpl.ExtractMethodPipeline.with
 import com.intellij.refactoring.extractMethod.newImpl.inplace.ExtractMethodPopupProvider
 import com.intellij.refactoring.extractMethod.newImpl.inplace.InplaceMethodExtractor
 import com.intellij.refactoring.extractMethod.newImpl.inplace.extractInDialog
-import com.intellij.refactoring.extractMethod.newImpl.structures.DataOutput
 import com.intellij.refactoring.extractMethod.newImpl.structures.ExtractOptions
-import com.intellij.refactoring.extractMethod.newImpl.structures.FlowOutput
-import com.intellij.refactoring.extractMethod.newImpl.structures.InputParameter
 import com.intellij.refactoring.listeners.RefactoringEventData
 import com.intellij.refactoring.listeners.RefactoringEventListener
 import com.intellij.refactoring.util.CommonRefactoringUtil
@@ -302,21 +299,4 @@ class MyMethodExtractor (private val functionNameProvider: FunctionNameProvider?
             if (selection != null) MyMethodExtractor(functionNameProvider).doExtract(file!!, selection)
         }
     }
-
-
-//    internal fun updateMethodAnnotations(method: PsiMethod, inputParameters: List<InputParameter>) {
-//        if (method.returnType !is PsiPrimitiveType) {
-//            //TODO use dataoutput.nullability instead
-//            val resultNullability = CodeFragmentAnalyzer.inferNullability(CodeFragmentAnalyzer.findReturnExpressionsIn(method))
-//            ExtractMethodHelper.addNullabilityAnnotation(method, resultNullability)
-//        }
-//        val parameters = method.parameterList.parameters
-//        inputParameters
-//            .filter { ((it.references.first() as? PsiReferenceExpression)?.resolve() as? PsiModifierListOwner).hasNullabilityAnnotation() }
-//            .forEach { inputParameter ->
-//                val parameterNullability = CodeFragmentAnalyzer.inferNullability(inputParameter.references)
-//                val parameter = parameters.find { it.name == inputParameter.name }
-//                if (parameter != null) ExtractMethodHelper.addNullabilityAnnotation(parameter, parameterNullability)
-//            }
-//    }
 }

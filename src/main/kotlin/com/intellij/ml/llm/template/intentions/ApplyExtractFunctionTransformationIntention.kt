@@ -8,10 +8,7 @@ import com.intellij.ml.llm.template.models.GPTRequestProvider
 import com.intellij.ml.llm.template.models.LLMRequestProvider
 import com.intellij.ml.llm.template.models.sendChatRequest
 import com.intellij.ml.llm.template.prompts.fewShotExtractSuggestion
-import com.intellij.ml.llm.template.utils.CodeTransformer
-import com.intellij.ml.llm.template.utils.EFCandidateFactory
-import com.intellij.ml.llm.template.utils.addLineNumbersToCodeSnippet
-import com.intellij.ml.llm.template.utils.identifyExtractFunctionSuggestions
+import com.intellij.ml.llm.template.utils.*
 import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.Editor
@@ -90,7 +87,7 @@ abstract class ApplyExtractFunctionTransformationIntention(
                             efSuggestionList.suggestionList.forEach{ efs ->
                                 efCandidates.addAll(efCandidateFactory.buildCandidates(efs, editor, file))
                             }
-                            efCandidates.take(1).forEach { candidate ->
+                            efCandidates.filter { isCandidateExtractable(it, editor, file) }.take(1).forEach { candidate ->
                                 codeTransformer.applyCandidate(candidate, project, editor, file)
                             }
                         }

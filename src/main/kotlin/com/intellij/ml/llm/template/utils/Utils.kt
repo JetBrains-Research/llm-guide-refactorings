@@ -1,19 +1,28 @@
 package com.intellij.ml.llm.template.utils
 
 import com.intellij.lang.java.JavaLanguage
+import com.intellij.ml.llm.template.LLMBundle
 import com.intellij.ml.llm.template.extractfunction.EFCandidate
 import com.intellij.ml.llm.template.extractfunction.EFSuggestion
 import com.intellij.ml.llm.template.extractfunction.EFSuggestionList
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.Editor
+import com.intellij.psi.PsiCodeBlock
+import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
+import com.intellij.psi.PsiMethod
 import com.intellij.refactoring.extractMethod.newImpl.ExtractMethodHelper
 import com.intellij.refactoring.extractMethod.newImpl.ExtractMethodPipeline.findAllOptionsToExtract
 import com.intellij.refactoring.extractMethod.newImpl.ExtractSelector
 import com.intellij.refactoring.extractMethod.newImpl.structures.ExtractOptions
+import com.intellij.refactoring.suggested.endOffset
+import com.intellij.refactoring.suggested.startOffset
 import org.jetbrains.kotlin.idea.KotlinLanguage
 import org.jetbrains.kotlin.idea.refactoring.introduce.extractFunction.ExtractKotlinFunctionHandler
+import org.jetbrains.kotlin.psi.KtBlockExpression
+import org.jetbrains.kotlin.psi.KtDeclaration
 import org.jetbrains.kotlin.psi.KtFile
+import org.jetbrains.kotlin.psi.KtNamedFunction
 
 
 fun addLineNumbersToCodeSnippet(codeSnippet: String, startIndex: Int): String {
@@ -79,41 +88,107 @@ fun identifyExtractFunctionSuggestions(input: String): EFSuggestionList {
 }
 
 
-fun isCandidateExtractable(efCandidate: EFCandidate, editor: Editor, file: PsiFile): Boolean {
-    editor.selectionModel.setSelection(efCandidate.offsetStart, efCandidate.offsetEnd)
-    when(file.language) {
-        JavaLanguage.INSTANCE -> return isFunctionExtractableJava(editor, file)
-        KotlinLanguage.INSTANCE -> return isSelectionExtractableKotlin(editor, file)
+fun isCandidateExtractable(
+    efCandidate: EFCandidate,
+    editor: Editor,
+    file: PsiFile,
+    observer: Observer? = null
+): Boolean {
+    when (file.language) {
+        JavaLanguage.INSTANCE -> return isFunctionExtractableJava(efCandidate, editor, file, observer)
+        KotlinLanguage.INSTANCE -> return isSelectionExtractableKotlin(efCandidate, editor, file, observer)
     }
     return false
 }
 
 private fun isFunctionExtractableJava(
+    efCandidate: EFCandidate,
     editor: Editor,
-    file: PsiFile
+    file: PsiFile,
+    observer: Observer?
 ): Boolean {
+    editor.selectionModel.setSelection(efCandidate.offsetStart, efCandidate.offsetEnd)
     val range = ExtractMethodHelper.findEditorSelection(editor)
     val elements = ExtractSelector().suggestElementsToExtract(file, range!!)
 
-    if (elements == null || elements.isEmpty()) {
+    if (selectionIsEntireBodyFunctionJava(efCandidate, editor, file)) {
+        observer?.update(
+            EFNotification(
+                result = EFApplicationResult.FAIL,
+                candidate = efCandidate,
+                reason = LLMBundle.message("extract.function.entire.function.selection.message"),
+            )
+        )
+        editor.selectionModel.removeSelection()
         return false
     }
 
-    var allOptionsToExtract = emptyList<ExtractOptions>()
+    if (elements.isEmpty()) {
+        observer?.update(
+            EFNotification(
+                result = EFApplicationResult.FAIL,
+                candidate = efCandidate,
+                reason = LLMBundle.message("extract.function.code.not.extractable.message"),
+            )
+        )
+        editor.selectionModel.removeSelection()
+        return false
+    }
+
+    val allOptionsToExtract: List<ExtractOptions>
+    var reason = ""
 
     try {
         allOptionsToExtract = findAllOptionsToExtract(elements)
     } catch (e: Exception) {
         logException(e)
+        reason = e.message ?: reason
+        observer?.update(
+            EFNotification(
+                result = EFApplicationResult.FAIL,
+                candidate = efCandidate,
+                reason = reason
+            )
+        )
+        editor.selectionModel.removeSelection()
+        return false
     }
+
+
+    observer?.update(
+        EFNotification(
+            result = if (allOptionsToExtract.isNotEmpty()) EFApplicationResult.OK else EFApplicationResult.FAIL,
+            candidate = efCandidate,
+            reason = reason
+        )
+    )
+    editor.selectionModel.removeSelection()
+
     return allOptionsToExtract.isNotEmpty()
 }
 
 private fun isSelectionExtractableKotlin(
+    efCandidate: EFCandidate,
     editor: Editor,
-    file: PsiFile
+    file: PsiFile,
+    observer: Observer?
 ): Boolean {
+    editor.selectionModel.setSelection(efCandidate.offsetStart, efCandidate.offsetEnd)
     var res = false
+    var reason = ""
+
+    if (selectionIsEntireBodyFunctionKotlin(efCandidate, editor, file)) {
+        observer?.update(
+            EFNotification(
+                result = EFApplicationResult.FAIL,
+                candidate = efCandidate,
+                reason = LLMBundle.message("extract.function.entire.function.selection.message")
+            )
+        )
+        editor.selectionModel.removeSelection()
+        return false
+    }
+
     val efKotlinHandler = ExtractKotlinFunctionHandler()
     if (file !is KtFile) return false
     try {
@@ -123,7 +198,17 @@ private fun isSelectionExtractableKotlin(
     } catch (e: Exception) {
         logException(e)
         res = false
+        reason = e.message ?: reason
     }
+
+    observer?.update(
+        EFNotification(
+            result = if (res) EFApplicationResult.OK else EFApplicationResult.FAIL,
+            candidate = efCandidate,
+            reason = reason
+        )
+    )
+    editor.selectionModel.removeSelection()
     return res
 }
 
@@ -131,4 +216,55 @@ private fun logException(e: Exception) {
     val logger = Logger.getInstance("#com.intellij.ml.llm")
     val lineNumber = e.stackTrace.firstOrNull()?.lineNumber
     logger.info("Utils.kt:$lineNumber", e)
+}
+
+private fun selectionIsEntireBodyFunctionKotlin(efCandidate: EFCandidate, editor: Editor, file: PsiFile): Boolean {
+    fun findParentFunctionBlock(psiElement: PsiElement?): KtBlockExpression? {
+        var result = psiElement
+
+        while (result != null) {
+            if ((result is KtDeclaration && result is KtNamedFunction)) {
+                return result.bodyBlockExpression
+            }
+            result = result.parent
+        }
+        return result
+    }
+
+    val start = file.findElementAt(efCandidate.offsetStart)
+    val end = file.findElementAt(efCandidate.offsetEnd)
+
+    val parentFunction = findParentFunctionBlock(start) ?: findParentFunctionBlock(end)
+    val statements = parentFunction?.statements ?: emptyList()
+    if (statements.isEmpty()) return false
+    val statementsOffsetRange = statements.first().startOffset to statements.last().endOffset
+
+    return efCandidate.offsetStart <= statementsOffsetRange.first && efCandidate.offsetEnd >= statementsOffsetRange.second
+}
+
+private fun selectionIsEntireBodyFunctionJava(efCandidate: EFCandidate, editor: Editor, file: PsiFile): Boolean {
+    fun findParentFunctionBlock(psiElement: PsiElement?): PsiCodeBlock? {
+        var result = psiElement
+
+        while (result != null) {
+            if (result is PsiMethod) {
+                return result.body
+            }
+            result = result.parent
+        }
+        return result
+    }
+
+    val start = file.findElementAt(efCandidate.offsetStart)
+    val end = file.findElementAt(efCandidate.offsetEnd)
+
+    val parentFunction = findParentFunctionBlock(start) ?: findParentFunctionBlock(end)
+    val statements = parentFunction?.statements ?: emptyArray()
+
+    if (statements.isEmpty()) {
+        return false
+    }
+
+    val statementsOffsetRange = statements.first().startOffset to statements.last().endOffset
+    return efCandidate.offsetStart <= statementsOffsetRange.first && efCandidate.offsetEnd >= statementsOffsetRange.second
 }

@@ -27,7 +27,8 @@ val CodexRequestProvider = LLMRequestProvider(CODEX_COMPLETION_MODEL, CODEX_EDIT
  * val GPTRequestProvider = LLMRequestProvider(GPT_COMPLETION_MODEL, GPT_EDIT_MODEL, GPT_4)
  */
 val GPTRequestProvider = LLMRequestProvider(GPT_COMPLETION_MODEL, GPT_EDIT_MODEL, CHAT_GPT_3_5_TURBO)
-val GPTExtractFunctionRequestProvider = ExtractFunctionLLMRequestProvider(GPT_COMPLETION_MODEL, GPT_EDIT_MODEL, CHAT_GPT_3_5_TURBO)
+val GPTExtractFunctionRequestProvider =
+    ExtractFunctionLLMRequestProvider(GPT_COMPLETION_MODEL, GPT_EDIT_MODEL, CHAT_GPT_3_5_TURBO)
 
 
 open class LLMRequestProvider(
@@ -134,16 +135,19 @@ open class LLMRequestProvider(
 }
 
 
-class ExtractFunctionLLMRequestProvider(completionModel: String, editModel: String, chatModel: String) :
+class ExtractFunctionLLMRequestProvider(
+    completionModel: String,
+    editModel: String,
+    chatModel: String,
+    private val mockReply: String = ""
+) :
     LLMRequestProvider(completionModel, editModel, chatModel) {
 
 
-    override fun createChatGPTRequest(
-        body: OpenAiChatRequestBody,
-    ): LLMBaseRequest<*> {
+    override fun createChatGPTRequest(body: OpenAiChatRequestBody): LLMBaseRequest<*> {
         if (Registry.`is`("llm.for.code.enable.mock.requests")) {
             logger.info("Emulating request to the API to test response presentation")
-            return MockExtractFunctionRequest()
+            return MockExtractFunctionRequest(mockReply)
         }
 
         logger.info(

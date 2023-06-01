@@ -4,13 +4,14 @@ import com.intellij.ml.llm.template.extractfunction.EFCandidate
 import com.intellij.ml.llm.template.extractfunction.EFSuggestion
 import com.intellij.ml.llm.template.extractfunction.EfCandidateType
 import com.intellij.openapi.editor.Editor
-import com.intellij.psi.PsiElement
-import com.intellij.psi.PsiFile
-import com.intellij.psi.PsiWhiteSpace
+import com.intellij.psi.*
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.refactoring.suggested.endOffset
 import com.intellij.refactoring.suggested.startOffset
 import org.jetbrains.kotlin.idea.base.psi.getLineNumber
+import org.jetbrains.kotlin.lexer.KtTokens
+import org.jetbrains.kotlin.psi.KtBlockExpression
+import org.jetbrains.kotlin.psi.KtExpression
 
 class EFCandidateFactory {
     fun buildCandidates(efSuggestion: EFSuggestion, editor: Editor, file: PsiFile): HashSet<EFCandidate> {
@@ -27,9 +28,20 @@ class EFCandidateFactory {
         return candidates
     }
 
+    fun buildCandidates(efSuggestions: List<EFSuggestion>, editor: Editor, file: PsiFile): HashSet<EFCandidate> {
+        val candidates = HashSet<EFCandidate>()
+
+        efSuggestions.forEach {
+            candidates.apply { addAll(buildCandidates(it, editor, file)) }
+        }
+
+        return candidates
+    }
+
     private fun buildCandidateAsIs(efSuggestion: EFSuggestion, editor: Editor, file: PsiFile): EFCandidate? {
         val psiElementStart = getLeftmostPsiElement(efSuggestion.lineStart - 1, editor, file)
-        val psiElementEnd = getLeftmostPsiElement(efSuggestion.lineEnd - 1, editor, file)
+        var psiElementEnd = getLeftmostPsiElement(efSuggestion.lineEnd - 1, editor, file)
+
         if (psiElementStart == null || psiElementEnd == null) {
             return null
         }
@@ -81,11 +93,23 @@ class EFCandidateFactory {
      * If the selection has lines 10-13 (included), then it will enlarge the selection to lines 10-14 (included)
      */
     private fun adjustRegion(psiElementStart: PsiElement, psiElementEnd: PsiElement): Pair<PsiElement, PsiElement>? {
-        var commonParent = PsiTreeUtil.findCommonParent(psiElementStart, psiElementEnd)
         var start = psiElementStart
         var end = psiElementEnd
 
-        if (commonParent == start || commonParent == end) {
+        // shift right to the first non-brace and non-white space element on the same line
+        while ((start.node.elementType == KtTokens.LBRACE || start.node.elementType == JavaTokenType.LBRACE || start is PsiWhiteSpace) &&
+            (start.getLineNumber(false) == start.nextSibling?.getLineNumber(false))
+        ) {
+            start = start.nextSibling
+        }
+
+        var commonParent = PsiTreeUtil.findCommonParent(psiElementStart, psiElementEnd)
+
+        if (commonParent == null) {
+            return null
+        }
+
+        if (commonParent == start || commonParent == end || (commonParent !is PsiBlockStatement && commonParent !is PsiCodeBlock && commonParent !is PsiModifiableCodeBlock)) {
             start = commonParent
             end = commonParent
         }
@@ -98,8 +122,28 @@ class EFCandidateFactory {
             return null
         }
 
-        start = bubbleUp(start, commonParent)
-        end = bubbleUp(end, commonParent)
+        if (commonParent.lastChild == end) {
+            start = commonParent.firstChild
+        } else if (commonParent.firstChild == start) {
+            end = commonParent.lastChild
+        } else {
+            start = bubbleUp(start, commonParent)
+            end = bubbleUp(end, commonParent)
+        }
+
+        if (start.node.elementType == KtTokens.LBRACE || start.node.elementType == JavaTokenType.LBRACE) {
+            var temp: PsiElement? = start
+            // bubble up the start node to its parent statement
+            while (true) {
+                if (temp == null) break
+                if (temp is PsiStatement && temp !is PsiBlockStatement) break
+                if (temp is KtExpression && temp !is KtBlockExpression) break
+                temp = temp.parent
+            }
+            if (temp != null) {
+                start = temp
+            }
+        }
 
         return start to end
     }
@@ -116,16 +160,24 @@ class EFCandidateFactory {
 
     private fun getLeftmostPsiElement(lineNumber: Int, editor: Editor, file: PsiFile): PsiElement? {
         // get the PsiElement on the given lineNumber
-        var psiElement = file.findElementAt(editor.document.getLineStartOffset(lineNumber)) ?: return null
-        var psiElementEndOffset = file.findElementAt(editor.document.getLineEndOffset(lineNumber)) ?: return null
+        var psiElement: PsiElement = file.findElementAt(editor.document.getLineStartOffset(lineNumber)) ?: return null
 
         // if there are multiple sibling PsiElements on the same line, look for the first one
         while (psiElement.getLineNumber(false) == psiElement.prevSibling?.getLineNumber(false)) {
             psiElement = psiElement.prevSibling
         }
 
+        // if we are still on a PsiWhiteSpace, then go right
+        while (psiElement.getLineNumber(false) == psiElement.nextSibling?.getLineNumber(false) && psiElement is PsiWhiteSpace) {
+            psiElement = psiElement.nextSibling
+        }
+
         // if there are multiple parent PsiElements on the same line, look for the top one
-        while (psiElement.getLineNumber(false) == psiElement.parent?.getLineNumber(false)) {
+        val psiElementLineNumber = psiElement.getLineNumber(false)
+        while (true) {
+            if (psiElement.parent == null) break
+            if (psiElement.parent is PsiCodeBlock || psiElement.parent is KtBlockExpression) break
+            if (psiElementLineNumber != psiElement.parent.getLineNumber(false)) break
             psiElement = psiElement.parent
         }
 

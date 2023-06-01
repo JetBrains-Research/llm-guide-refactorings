@@ -2,6 +2,7 @@ package com.intellij.ml.llm.template.utils
 
 import com.intellij.ml.llm.template.extractfunction.EFCandidate
 import com.intellij.ml.llm.template.extractfunction.EFSuggestion
+import com.intellij.openapi.diagnostic.Logger
 
 enum class EFApplicationResult(s: String) {
     OK("OK"),
@@ -37,5 +38,11 @@ class EFObserver : Observer {
 
     fun getNotifications(): List<EFNotification> {
         return notifications.values.flatten()
+    }
+}
+
+class EFLoggerObserver (private val logger: Logger) : Observer {
+    override fun update(notification: EFNotification) {
+        logger.info(notification.toString())
     }
 }

@@ -4,11 +4,13 @@ import com.intellij.codeInsight.intention.IntentionAction
 import com.intellij.ml.llm.template.LLMBundle
 import com.intellij.ml.llm.template.extractfunction.EFCandidate
 import com.intellij.ml.llm.template.models.GPTExtractFunctionRequestProvider
-import com.intellij.ml.llm.template.models.GPTRequestProvider
+import com.intellij.ml.llm.template.models.LLMBaseResponse
 import com.intellij.ml.llm.template.models.LLMRequestProvider
 import com.intellij.ml.llm.template.models.sendChatRequest
 import com.intellij.ml.llm.template.prompts.fewShotExtractSuggestion
+import com.intellij.ml.llm.template.showEFNotification
 import com.intellij.ml.llm.template.utils.*
+import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.Editor
@@ -25,11 +27,14 @@ import com.intellij.psi.util.PsiUtilBase
 
 @Suppress("UnstableApiUsage")
 abstract class ApplyExtractFunctionTransformationIntention(
-    private val llmRequestProvider: LLMRequestProvider = GPTRequestProvider,
     private val efLLMRequestProvider: LLMRequestProvider = GPTExtractFunctionRequestProvider
 ) : IntentionAction {
     private val logger = Logger.getInstance("#com.intellij.ml.llm")
     private val codeTransformer = CodeTransformer()
+
+    init {
+        codeTransformer.addObserver(EFLoggerObserver(logger))
+    }
 
     override fun getFamilyName(): String = LLMBundle.message("intentions.apply.transformation.family.name")
 
@@ -49,7 +54,7 @@ abstract class ApplyExtractFunctionTransformationIntention(
              * 2. Process the reply
              *      - how to handle multiple suggestions? Take the largest?
              *      - options should be filtered based on some criteria such as how actionable they are,
-             *        how many lines of code do they cover, etc
+             *        how many lines of code do they cover, etc.
              * 3. Present suggestions to developer and let the developer choose
              * 4. Based on the developer's choice, automatic Extract Function should be performed
              */
@@ -60,7 +65,7 @@ abstract class ApplyExtractFunctionTransformationIntention(
                 val codeSnippet = namedElement.text
                 val textRange = namedElement.textRange
                 selectionModel.setSelection(textRange.startOffset, textRange.endOffset)
-                val startLineNumber = editor.document.getLineNumber(selectionModel.selectionStart)
+                val startLineNumber = editor.document.getLineNumber(selectionModel.selectionStart) + 1
                 val withLineNumbers = addLineNumbersToCodeSnippet(codeSnippet, startLineNumber)
                 invokeLlm(withLineNumbers, project, editor, file)
             }
@@ -80,16 +85,14 @@ abstract class ApplyExtractFunctionTransformationIntention(
                 )
                 if (response != null) {
                     invokeLater {
-                        val efCandidateFactory = EFCandidateFactory()
-                        response.getSuggestions().forEach { suggestion ->
-                            val efSuggestionList = identifyExtractFunctionSuggestions(suggestion.text)
-                            val efCandidates = ArrayList<EFCandidate>()
-                            efSuggestionList.suggestionList.forEach{ efs ->
-                                efCandidates.addAll(efCandidateFactory.buildCandidates(efs, editor, file))
-                            }
-                            efCandidates.filter { isCandidateExtractable(it, editor, file) }.take(1).forEach { candidate ->
-                                codeTransformer.applyCandidate(candidate, project, editor, file)
-                            }
+                        if (response.getSuggestions().isEmpty()) {
+                            showEFNotification(
+                                project,
+                                LLMBundle.message("notification.extract.function.with.llm.no.suggestions.message"),
+                                NotificationType.INFORMATION
+                            )
+                        } else {
+                            processSuggestions(response, editor, file, project)
                         }
                     }
                 }
@@ -98,10 +101,55 @@ abstract class ApplyExtractFunctionTransformationIntention(
         ProgressManager.getInstance().runProcessWithProgressAsynchronously(task, BackgroundableProcessIndicator(task))
     }
 
+    private fun processSuggestions(
+        response: LLMBaseResponse,
+        editor: Editor,
+        file: PsiFile,
+        project: Project
+    ) {
+        val efCandidateFactory = EFCandidateFactory()
+        for (suggestion in response.getSuggestions()) {
+            val efSuggestionList = identifyExtractFunctionSuggestions(suggestion.text)
+            val efCandidates = ArrayList<EFCandidate>()
+            efSuggestionList.suggestionList.forEach { efs ->
+                efCandidates.addAll(efCandidateFactory.buildCandidates(efs, editor, file))
+            }
+
+            if (efCandidates.isEmpty()) {
+                showEFNotification(
+                    project,
+                    LLMBundle.message("notification.extract.function.with.llm.no.suggestions.message"),
+                    NotificationType.INFORMATION
+                )
+            } else {
+                val filteredCandidates = efCandidates.filter {
+                    isCandidateExtractable(
+                        it,
+                        editor,
+                        file,
+                        EFLoggerObserver(logger)
+                    )
+                }
+                if (filteredCandidates.isEmpty()) {
+                    showEFNotification(
+                        project,
+                        LLMBundle.message("notification.extract.function.with.llm.no.extractable.candidates.message"),
+                        NotificationType.INFORMATION
+                    )
+                } else {
+                    filteredCandidates.take(1).forEach { candidate ->
+                        codeTransformer.applyCandidate(candidate, project, editor, file)
+                    }
+                }
+            }
+        }
+    }
+
     private fun getParentNamedElement(editor: Editor): PsiNameIdentifierOwner? {
         val element = PsiUtilBase.getElementAtCaret(editor)
         return PsiTreeUtil.getParentOfType(element, PsiNameIdentifierOwner::class.java)
     }
+
 
     abstract fun getInstruction(project: Project, editor: Editor): String?
 

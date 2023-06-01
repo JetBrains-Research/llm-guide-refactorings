@@ -1,11 +1,19 @@
 package com.intellij.ml.llm.template
 
-import com.intellij.ml.llm.template.utils.identifyExtractFunctionSuggestions
-import com.intellij.ml.llm.template.utils.replaceGithubUrlLineRange
-import com.intellij.testFramework.fixtures.BasePlatformTestCase
+import com.intellij.ml.llm.template.extractfunction.EFSuggestion
+import com.intellij.ml.llm.template.models.ExtractFunctionLLMRequestProvider
+import com.intellij.ml.llm.template.models.LLMRequestProvider
+import com.intellij.ml.llm.template.models.sendChatRequest
+import com.intellij.ml.llm.template.utils.*
+import com.intellij.testFramework.LightPlatformCodeInsightTestCase
 import junit.framework.TestCase
 
-class UtilsTest : BasePlatformTestCase() {
+class UtilsTest : LightPlatformCodeInsightTestCase() {
+    private var projectPath = "src/test"
+    override fun getTestDataPath(): String {
+        return projectPath
+    }
+
     fun `test identify extract function suggestions from chatgpt reply`() {
         val input = """
             I would suggest the following extract method refactorings:
@@ -65,6 +73,23 @@ class UtilsTest : BasePlatformTestCase() {
         )
     }
 
+    fun `test identify extract function suggestions from ChatGPT reply in mock mode`() {
+        com.intellij.openapi.util.registry.Registry.get("llm.for.code.enable.mock.requests").setValue(true)
+        val mockReply = """
+            {"id":"chatcmpl-7ODaGfLVvacxtdsodruHUvYswiDwH","object":"chat.completion","created":1686006444,"model":"gpt-3.5-turbo-0301","usage":{"prompt_tokens":1830,"completion_tokens":70,"total_tokens":1900},"choices":[{"message":{"role":"assistant","content":"[\n{\"function_name\": \"advanceReadInputCharacter\", \"line_start\": 646, \"line_end\": 691},\n{\"function_name\": \"getNextTransition\", \"line_start\": 692, \"line_end\": 703},\n{\"function_name\": \"handleAction\", \"line_start\": 714, \"line_end\": 788}\n]"},"finish_reason":"stop","index":0}]}
+        """.trimIndent()
+        val efLLMRequestProvider: LLMRequestProvider =
+            ExtractFunctionLLMRequestProvider("text-davinci-003", "text-davinci-edit-001", "gpt-3.5-turbo", mockReply)
+        val llmResponse = sendChatRequest(
+            project, emptyList(), efLLMRequestProvider.chatModel, efLLMRequestProvider
+        )
+
+        val llmSuggestions = llmResponse?.getSuggestions()
+        val efSuggestions = identifyExtractFunctionSuggestions(llmSuggestions?.get(0)?.text!!).suggestionList
+
+        TestCase.assertEquals(3, efSuggestions.size)
+    }
+
     fun `test no identifiable suggestions in chatgpt reply`() {
         val input = """
             "The above function does not have any extract method opportunities."
@@ -82,5 +107,23 @@ class UtilsTest : BasePlatformTestCase() {
             "https://github.com/apache/kafka/blob/trunk/clients/src/test/java/org/apache/kafka/common/requests/UpdateMetadataRequestTest.java#L90-L120"
         val actualUrl = replaceGithubUrlLineRange(url, 90, 120)
         TestCase.assertEquals(expectedUrl, actualUrl)
+    }
+
+    fun `test isCandidateExtractable generates correct notifications`() {
+        configureByFile("/testdata/KafkaAdminClientTest.java")
+        val efSuggestion = EFSuggestion(
+            functionName = "foo",
+            lineStart = 114,
+            lineEnd = 119
+        )
+        val efObserver = EFObserver()
+        val candidates = EFCandidateFactory().buildCandidates(efSuggestion, editor, file).toTypedArray()
+        TestCase.assertEquals(2, candidates.size)
+
+        candidates.forEach { isCandidateExtractable(it, editor, file, efObserver) }
+        val notifications = efObserver.getNotifications()
+        TestCase.assertEquals(2, notifications.size)
+        TestCase.assertEquals(EFApplicationResult.OK, notifications.get(0).result)
+        TestCase.assertEquals(EFApplicationResult.FAIL, notifications.get(1).result)
     }
 }

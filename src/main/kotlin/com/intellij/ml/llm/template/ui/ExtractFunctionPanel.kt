@@ -1,39 +1,27 @@
 package com.intellij.ml.llm.template.ui
 
 import com.intellij.codeInsight.unwrap.ScopeHighlighter
+import com.intellij.ml.llm.template.LLMBundle
+import com.intellij.ml.llm.template.extractfunction.EFCandidate
+import com.intellij.ml.llm.template.models.FunctionNameProvider
+import com.intellij.ml.llm.template.models.MyMethodExtractor
+import com.intellij.ml.llm.template.utils.CodeTransformer
 import com.intellij.openapi.actionSystem.ActionManager
-import com.intellij.openapi.command.CommandProcessor
 import com.intellij.openapi.editor.Editor
-import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.keymap.KeymapUtil
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.JBPopup
-import com.intellij.openapi.util.Pair
 import com.intellij.openapi.util.TextRange
-import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiMethod
-import com.intellij.psi.codeStyle.CodeStyleManager
+import com.intellij.refactoring.extractMethod.newImpl.MethodExtractor
 import com.intellij.refactoring.ui.MethodSignatureComponent
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.table.JBTable
-import com.intellij.util.containers.ContainerUtil
 import com.intellij.util.ui.JBDimension
 import com.intellij.util.ui.JBUI
-//import com.jetbrains.php.architecture.complexityMetrics.PhpArchitectureBundle
-//import com.jetbrains.php.architecture.complexityMetrics.quickFixes.extractFunction.PhpExtractMethodCandidate
-//import com.jetbrains.php.lang.psi.PhpPsiElementFactory
-//import com.jetbrains.php.lang.psi.elements.PhpTypedElement
-//import com.jetbrains.php.refactoring.extractMethod.PhpExtractMethodDialog.getParameterItems
-//import com.jetbrains.php.refactoring.extractMethod.PhpExtractMethodDialog.suggestNames
-//import com.jetbrains.php.refactoring.extractMethod.PhpExtractMethodHandler
-//import com.jetbrains.php.refactoring.extractMethod.PhpExtractMethodParameterInfo
-//import com.jetbrains.php.refactoring.extractMethod.PhpParametersFolder
-//import com.jetbrains.php.refactoring.extractMethod.inplace.PhpExtractMethodPopupProvider
-//import com.jetbrains.php.refactoring.extractMethod.inplace.PhpInplaceMethodExtractor
-//import com.jetbrains.php.refactoring.ui.PhpCodeComponentsFactory
 import java.awt.Dimension
 import java.awt.event.KeyEvent
 import java.awt.event.MouseEvent
@@ -41,32 +29,51 @@ import java.util.concurrent.atomic.AtomicReference
 import javax.swing.JComponent
 import javax.swing.KeyStroke
 import javax.swing.ListSelectionModel
+import javax.swing.table.DefaultTableModel
+
 
 class ExtractFunctionPanel(
     project: Project,
-    function: PsiMethod,
     editor: Editor,
-    candidates: List<ExtractMethodCandidateWithUsageAdapter>,
-    highlighter: AtomicReference<ScopeHighlighter>,
+    file: PsiFile,
+    candidates: List<EFCandidate>,
+    codeTransformer: CodeTransformer,
+    highlighter: AtomicReference<ScopeHighlighter>
 ) {
     val myExtractFunctionsCandidateTable: JBTable
-    val myExtractFunctionsScrollPane: JBScrollPane
+    private val myExtractFunctionsScrollPane: JBScrollPane
     private val myProject: Project = project
-    private val myFunction = function
-//    val myMethodSignaturePreview: MethodSignatureComponent = PhpCodeComponentsFactory.createPhpMethodSignaturePreview(myProject)
-    val myMethodSignaturePreview = MethodSignatureComponent("", project, com.intellij.ide.highlighter.JavaFileType.INSTANCE)
+    private val myMethodSignaturePreview: MethodSignatureComponent
     private val myCandidates = candidates
     private val myEditor = editor
-    private val myCandidatesPresentation: Map<ExtractMethodCandidateWithUsageAdapter, String>
-    private var myPopup: JBPopup?
+    private var myPopup: JBPopup? = null
+    private val myCodeTransformer = codeTransformer
+    private val myFile = file
+    private val myHighlighter = highlighter
 
     init {
-        myMethodSignaturePreview.isFocusable = false
-        myMethodSignaturePreview.minimumSize = Dimension(500, 200)
-        myMethodSignaturePreview.preferredSize = Dimension(500, 200)
-        myMethodSignaturePreview.maximumSize = Dimension(500, 200)
-        myPopup = null
-        myExtractFunctionsCandidateTable = object : JBTable(ExtractFunctionCandidateTableModel(candidates)) {
+        val tableModel = buildTableModel(myCandidates)
+        val candidateSignatureMap = buildCandidateSignatureMap(myCandidates)
+        myMethodSignaturePreview = buildMethodSignaturePreview()
+        myExtractFunctionsCandidateTable = buildExtractFunctionCandidateTable(tableModel, candidateSignatureMap)
+        myExtractFunctionsScrollPane = buildExtractFunctionScrollPane()
+    }
+
+    private fun buildCandidateSignatureMap(candidates: List<EFCandidate>): Map<EFCandidate, String> {
+        val candidateSignatureMap: MutableMap<EFCandidate, String> = mutableMapOf()
+
+        candidates.forEach { candidate ->
+            candidateSignatureMap[candidate] = generateFunctionSignature(candidate)
+        }
+
+        return candidateSignatureMap
+    }
+
+    private fun buildExtractFunctionCandidateTable(
+        tableModel: DefaultTableModel,
+        candidateSignatureMap: Map<EFCandidate, String>
+    ): JBTable {
+        val extractFunctionCandidateTable = object : JBTable(tableModel) {
             override fun processKeyBinding(ks: KeyStroke, e: KeyEvent, condition: Int, pressed: Boolean): Boolean {
                 if (e.keyCode == KeyEvent.VK_ENTER) {
                     if (e.id == KeyEvent.KEY_PRESSED) {
@@ -92,99 +99,73 @@ class ExtractFunctionPanel(
                 super.processMouseEvent(e)
             }
         }
-        myExtractFunctionsCandidateTable.minimumSize = Dimension(-1, 100)
-        myExtractFunctionsCandidateTable.tableHeader = null
+        extractFunctionCandidateTable.minimumSize = Dimension(-1, 100)
+        extractFunctionCandidateTable.tableHeader = null
 
-        myCandidatesPresentation = HashMap()
-        for (it in myCandidates) {
-            myCandidatesPresentation[it] = calculateSignature(it.candidate)
+        extractFunctionCandidateTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
+        extractFunctionCandidateTable.selectionModel.addListSelectionListener {
+            val candidate = myCandidates[extractFunctionCandidateTable.selectedRow]
+            myEditor.selectionModel.setSelection(candidate.offsetStart, candidate.offsetEnd)
+
+            myMethodSignaturePreview.setSignature(candidateSignatureMap[candidate])
+            val scopeHighlighter: ScopeHighlighter = myHighlighter.get()
+            scopeHighlighter.dropHighlight()
+            val range = TextRange(candidate.offsetStart, candidate.offsetEnd)
+            scopeHighlighter.highlight(com.intellij.openapi.util.Pair(range, listOf(range)))
         }
-        myExtractFunctionsCandidateTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
+        extractFunctionCandidateTable.selectionModel.setSelectionInterval(0, 0)
+        extractFunctionCandidateTable.cellEditor = null
 
-        myExtractFunctionsCandidateTable.selectionModel.addListSelectionListener {
-            val phpExtractMethodCandidate = candidates[myExtractFunctionsCandidateTable.selectedRow]
-            myMethodSignaturePreview.setSignature(myCandidatesPresentation[phpExtractMethodCandidate])
-            val h: ScopeHighlighter = highlighter.get()
-            h.dropHighlight()
-            val blockFragment = phpExtractMethodCandidate.candidate.fragment
-            if (blockFragment != null && blockFragment.isValid) {
-                val range: TextRange = blockFragment.textRange
-                val element: PsiElement = blockFragment.startElement
-                OpenFileDescriptor(element.project, element.containingFile.virtualFile, element.textOffset).navigate(false)
-                h.highlight(Pair.create(range, listOf(range)))
+        extractFunctionCandidateTable.columnModel.getColumn(0).maxWidth = 50
+        extractFunctionCandidateTable.columnModel.getColumn(1).cellRenderer = FunctionNameTableCellRenderer()
+        extractFunctionCandidateTable.setShowGrid(false)
+
+        return extractFunctionCandidateTable
+    }
+
+    private fun buildExtractFunctionScrollPane(): JBScrollPane {
+        val extractFunctionsScrollPane = JBScrollPane(myExtractFunctionsCandidateTable)
+
+        extractFunctionsScrollPane.border = JBUI.Borders.empty()
+        extractFunctionsScrollPane.maximumSize = Dimension(500, 100)
+
+        return extractFunctionsScrollPane
+    }
+
+    private fun buildTableModel(candidates: List<EFCandidate>): DefaultTableModel {
+        val columnNames = arrayOf("Function Length", "Function Name")
+        val model = object : DefaultTableModel() {
+            override fun getColumnClass(column: Int): Class<*> {
+                // Return the class that corresponds to the specified column.
+                return if (column == 0) String::class.java else Integer::class.java
+            }
+
+            override fun isCellEditable(row: Int, column: Int): Boolean {
+                // Makes the cells in the table non-editable
+                return false
             }
         }
-        myExtractFunctionsCandidateTable.selectionModel.setSelectionInterval(0, 0)
-        myExtractFunctionsScrollPane = JBScrollPane(myExtractFunctionsCandidateTable)
-        myExtractFunctionsScrollPane.border = JBUI.Borders.empty()
-        myExtractFunctionsScrollPane.maximumSize = Dimension(500, 100)
-
-    }
-
-    fun setDelegatePopup(jbPopup: JBPopup) {
-        myPopup = jbPopup
-        myExtractFunctionsCandidateTable.columnModel.getColumn(0).cellRenderer = LineNumberRenderer()
-        myExtractFunctionsCandidateTable.columnModel.getColumn(0).maxWidth = 50
-        myExtractFunctionsCandidateTable.columnModel.getColumn(1).cellRenderer = ExtractCandidateFirstStatementRenderer()
-        myExtractFunctionsCandidateTable.setShowGrid(false)
-    }
-
-    private fun calculateSignature(phpExtractMethodCandidate: PhpExtractMethodCandidate): String {
-        val parametersBuilder = StringBuilder()
-        getParameterItems(phpExtractMethodCandidate, phpExtractMethodCandidate.inputVariables,
-            phpExtractMethodCandidate.outputVariables, PhpParametersFolder()).joinTo(
-            parametersBuilder, ",\n\t") { e -> typeAnnotation(e) + "$" + e.name }
-
-        val suggestNames = suggestNames(myProject, phpExtractMethodCandidate, phpExtractMethodCandidate.outputVariables)
-        val functionName =
-            if (suggestNames.isEmpty())
-                "extracted"
-            else
-                suggestNames.first()
-
-        val generateCodeText = phpExtractMethodCandidate.fragment.generateCodeText()
-        val startText = generateCodeText.split("\n").first()
-        val endText = generateCodeText.split("\n").last()
-        val functionText = "function $functionName(\n$parametersBuilder\n) ${returnTypePresentation(phpExtractMethodCandidate)} {\n" +
-                "\t$startText\n" +
-                "\t// method body" +
-                "\n\t$endText\n" +
-                "}"
-        val createFunction = PhpPsiElementFactory.createFunction(myProject, functionText)
-        return CodeStyleManager.getInstance(myProject).reformat(createFunction).text
-    }
-
-    private fun typeAnnotation(e: PhpExtractMethodParameterInfo): String {
-        if (e.typeText.isEmpty()) {
-            return ""
-        } else {
-            return e.typeText.toString() + " "
+        model.setColumnIdentifiers(columnNames)
+        candidates.forEach { efCandidate ->
+            val functionLength = efCandidate.lineEnd - efCandidate.lineStart + 1
+            val functionName = String.format("${efCandidate.functionName}()")
+            model.addRow(arrayOf(functionLength, functionName))
         }
+        return model
     }
 
-    private fun returnTypePresentation(phpExtractMethodCandidate: PhpExtractMethodCandidate): String {
-        val outputVariables = phpExtractMethodCandidate.outputVariables
-        if (outputVariables.size == 0) {
-            return ":void"
-        }
-        if (outputVariables.size == 1) {
-            val first = outputVariables.first()
-            if (first is PhpTypedElement) {
+    private fun buildMethodSignaturePreview(): MethodSignatureComponent {
+        val methodSignaturePreview =
+            MethodSignatureComponent("", myProject, com.intellij.ide.highlighter.JavaFileType.INSTANCE)
+        methodSignaturePreview.isFocusable = false
+        methodSignaturePreview.minimumSize = Dimension(500, 200)
+        methodSignaturePreview.preferredSize = Dimension(500, 200)
+        methodSignaturePreview.maximumSize = Dimension(500, 200)
 
-                val returnTypePresentation = PhpExtractMethodHandler.getReturnTypePresentation(myProject, first.type, myFunction)
-                if (returnTypePresentation != null) {
-                    return ":$returnTypePresentation"
-                }
-                else {
-                    return ""
-                }
-            }
-        }
-        return ""
+        return methodSignaturePreview
     }
 
     fun createPanel(): JComponent {
-        // IDEA-318533 Port PhpExtractFunctionPanel to Kotlin UI DSL 2
         val popupPanel = panel {
             row {
                 cell(myExtractFunctionsScrollPane).align(AlignX.FILL)
@@ -197,38 +178,70 @@ class ExtractFunctionPanel(
             }
 
             row {
-                button(PhpArchitectureBundle.message("extract.class.popup.window.button"), actionListener = {
-                    val selectedBlockFragment = myCandidates[myExtractFunctionsCandidateTable.selectedRow]
+                button(LLMBundle.message("ef.candidates.popup.extract.function.button.title"), actionListener = {
                     myPopup?.closeOk(null)
-                    doExtractMethod(selectedBlockFragment)
-                }).
-                comment(PhpArchitectureBundle.message(
-                    "extract.class.popup.label.to.extract.any.other.piece.code.select.it.in.editor.invoke.extract.method.refactoring.0",
-                    KeymapUtil.getFirstKeyboardShortcutText(ActionManager.getInstance().getAction("ExtractMethod"))))
+                    doExtractMethod(myCandidates[myExtractFunctionsCandidateTable.selectedRow])
+                }).comment(
+                    LLMBundle.message(
+                        "ef.candidates.popup.invoke.extract.function",
+                        KeymapUtil.getFirstKeyboardShortcutText(ActionManager.getInstance().getAction("ExtractMethod"))
+                    )
+                )
             }
         }
         popupPanel.preferredFocusedComponent = myExtractFunctionsCandidateTable
         return popupPanel
     }
 
-    fun doExtractMethod(selectedBlockFragment: ExtractMethodCandidateWithUsageAdapter) {
-        myPopup!!.cancel()
-        val fragment = selectedBlockFragment.candidate.fragment
-        if (!myEditor.selectionModel.hasSelection()) {
-            myEditor.selectionModel.setSelection(fragment.startOffset, fragment.endOffset)
+    fun setDelegatePopup(jbPopup: JBPopup) {
+        myPopup = jbPopup
+    }
+
+    private fun generateFunctionSignature(psiMethod: PsiMethod): String {
+        val builder = StringBuilder()
+
+        // Add the method name
+        builder.append(psiMethod.name)
+
+        // Add the parameters
+        builder.append("(")
+        psiMethod.parameterList.parameters.joinTo(
+            builder,
+            separator = ", \n\t"
+        ) { "${it.type.presentableText} ${it.name}" }
+        builder.append(")")
+
+        // Add the return type if it's not a constructor
+        if (!psiMethod.isConstructor) {
+            builder.append(": ${psiMethod.returnType?.presentableText ?: "Unit"}")
         }
-        val file: PsiFile = fragment.file
-        val settings = PhpExtractMethodHandler.getSettingsForInplace(fragment)
-        val inplaceMethodExtractor = PhpInplaceMethodExtractor(myProject, file, myEditor, fragment, settings, PhpExtractMethodPopupProvider())
+
+        // Add function body
+        builder.append(" {\n\t...\n}")
+
+        return builder.toString()
+    }
+
+
+    private fun generateFunctionSignature(efCandidate: EFCandidate): String {
+        var signature = ""
+        MyMethodExtractor(FunctionNameProvider(efCandidate.functionName)).findAndSelectExtractOption(
+            myEditor,
+            myFile,
+            TextRange(efCandidate.offsetStart, efCandidate.offsetEnd)
+        )?.thenApply { options ->
+            val elementsToReplace = MethodExtractor().prepareRefactoringElements(options)
+            elementsToReplace.method.setName(efCandidate.functionName)
+            signature = generateFunctionSignature(elementsToReplace.method)
+        }
+        return signature
+    }
+
+    fun doExtractMethod(efCandidate: EFCandidate) {
+        myPopup!!.cancel()
         val runnable = Runnable {
-            executeRefactoringCommand(myProject) {
-                inplaceMethodExtractor.performInplaceRefactoring(ContainerUtil.newLinkedHashSet("extracted"))
-            }
+            myCodeTransformer.applyCandidate(efCandidate, myProject, myEditor, myFile)
         }
         runnable.run()
     }
-    private fun executeRefactoringCommand(project: Project, command: () -> Unit){
-        CommandProcessor.getInstance().executeCommand(project, command, PhpExtractMethodHandler.getRefactoringName(), null)
-    }
-
 }

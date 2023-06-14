@@ -38,23 +38,15 @@ class MockChatGPTRequest : LLMBaseRequest<String>("") {
     }
 }
 
-class MockExtractFunctionRequest : LLMBaseRequest<String>("") {
+class MockExtractFunctionRequest(private val replyWith: String = "") : LLMBaseRequest<String>("") {
     override fun sendSync(): LLMBaseResponse {
-        return Gson().fromJson(mockExtractFunctionJson3(), OpenAIChatResponse::class.java)
-    }
-    private fun mockExtractFunctionJson3() : String {
-        return """
-            {"id":"chatcmpl-7Ga9htDtNUgyoywb3lC49nsV5l1Cw","object":"chat.completion","created":1684186585,"choices":[{"index":0,"message":{"role":"assistant","content":"                [\n                {\"function_name\":  \"createPartitionMetadata\", \"line_start\": 2317, \"line_end\": 2331},\n                {\"function_name\":  \"createRecordsToDelete\", \"line_start\": 2338, \"line_end\": 2343},\n                {\"function_name\":  \"handlePartitionResult\", \"line_start\": 2347, \"line_end\": 2351},\n                {\"function_name\":  \"handlePartitionFailure\", \"line_start\": 2354, \"line_end\": 2360},\n                {\"function_name\":  \"handleMetadataFailure\", \"line_start\": 2363, \"line_end\": 2369},\n                {\"function_name\":  \"handlePartitionFailure\", \"line_start\": 2371, \"line_end\": 2377},\n                {\"function_name\":  \"handlePartitionFailure\", \"line_start\": 2380, \"line_end\": 2386}\n                ]"},"finish_reason":"stop"}],"usage":{"prompt_tokens":2299,"completion_tokens":193,"total_tokens":2492}}
-        """.trimIndent()
+        if (replyWith.isNotEmpty()) {
+            return Gson().fromJson(replyWith, OpenAIChatResponse::class.java)
+        }
+        return Gson().fromJson(mockExtractFunctionJson(), OpenAIChatResponse::class.java)
     }
 
-    private fun mockExtractFunctionJson2() : String {
-        return """
-            {"id":"chatcmpl-7F6QK06TJAXmvATENvum9ksqRMYfo","object":"chat.completion","created":1683833968,"model":"gpt-3.5-turbo-0301","usage":{"prompt_tokens":1060,"completion_tokens":51,"total_tokens":1111},"choices":[{"message":{"role":"assistant","content":"```\n[\n{\"function_name\": \"getListFromCurrentValue\", \"line_start\": 229, \"line_end\": 242},\n{\"function_name\": \"someOtherFunctionName\", \"line_start\": 235, \"line_end\": 250}\n]\n```"},"finish_reason":"stop","index":0}]}
-        """.trimIndent()
-    }
-
-    private fun mockExtractFunctionJson() : String {
+    private fun mockExtractFunctionJson(): String {
         return """
             {
               "id": "chatcmpl-71ee3QSnvOnoRxpOyh2NvBxTFvZ40",

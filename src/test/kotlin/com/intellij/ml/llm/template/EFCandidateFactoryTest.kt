@@ -3,9 +3,7 @@ package com.intellij.ml.llm.template
 import com.intellij.ml.llm.template.extractfunction.EFCandidate
 import com.intellij.ml.llm.template.extractfunction.EFSuggestion
 import com.intellij.ml.llm.template.extractfunction.EfCandidateType
-import com.intellij.ml.llm.template.utils.CodeTransformer
-import com.intellij.ml.llm.template.utils.EFCandidateFactory
-import com.intellij.ml.llm.template.utils.isCandidateExtractable
+import com.intellij.ml.llm.template.utils.*
 import com.intellij.testFramework.LightPlatformCodeInsightTestCase
 import junit.framework.TestCase
 
@@ -100,7 +98,7 @@ class EFCandidateFactoryTest : LightPlatformCodeInsightTestCase() {
         efCandidates.addAll(candidateFactory.buildCandidates(efs1, editor, file))
         efCandidates.addAll(candidateFactory.buildCandidates(efs2, editor, file))
 
-        TestCase.assertEquals(2, efCandidates.size)
+        TestCase.assertEquals(3, efCandidates.size)
 
         val codeTransformer = CodeTransformer()
         val workingEFCandidates = ArrayList<EFCandidate>()
@@ -243,5 +241,294 @@ class EFCandidateFactoryTest : LightPlatformCodeInsightTestCase() {
             .filter { it.type == EfCandidateType.AS_IS && isCandidateExtractable(it, editor, file) }
         println(editor.selectionModel.selectedText)
         TestCase.assertEquals(0, candidates.size)
+    }
+
+
+    /**
+     * The following suggestions should all result in candidates
+     * that should fail because they select the entire function to be extracted
+     */
+    fun `test entire function body is not extractable in Kotlin code`() {
+        configureByFile("/testdata/RodCuttingProblem.kt")
+        val efSuggestions = listOf(
+            EFSuggestion(
+                functionName = "createPartitionMetadata",
+                lineStart = 9,
+                lineEnd = 18
+            ),
+            EFSuggestion(
+                functionName = "createPartitionMetadata",
+                lineStart = 9,
+                lineEnd = 19
+            ),
+            EFSuggestion(
+                functionName = "createPartitionMetadata",
+                lineStart = 22,
+                lineEnd = 26
+            ),
+            EFSuggestion(
+                functionName = "createPartitionMetadata",
+                lineStart = 22,
+                lineEnd = 25
+            ),
+            EFSuggestion(
+                functionName = "createPartitionMetadata",
+                lineStart = 29,
+                lineEnd = 31
+            ),
+            EFSuggestion(
+                functionName = "createPartitionMetadata",
+                lineStart = 34,
+                lineEnd = 36
+            ),
+        )
+        val efObserver = EFObserver()
+        val filteredCandidates =
+            EFCandidateFactory().buildCandidates(efSuggestions, editor, file)
+                .toTypedArray()
+                .filter {
+                    isCandidateExtractable(it, editor, file, efObserver)
+                }
+        TestCase.assertTrue(filteredCandidates.isEmpty())
+        efObserver.getNotifications().forEach {
+            TestCase.assertEquals(LLMBundle.message("extract.function.entire.function.selection.message"), it.reason)
+        }
+    }
+
+    fun `test extractable function in various corner cases in Kotlin code`() {
+        configureByFile("/testdata/RodCuttingProblem.kt")
+        val efSuggestions = listOf(
+            EFSuggestion(
+                functionName = "foo",
+                lineStart = 23,
+                lineEnd = 24
+            ),
+            EFSuggestion(
+                functionName = "foo",
+                lineStart = 30,
+                lineEnd = 31
+            )
+        )
+        val efObserver = EFObserver()
+        val candidates = EFCandidateFactory().buildCandidates(efSuggestions, editor, file).toTypedArray()
+        val filteredCandidates = candidates.filter {
+            isCandidateExtractable(it, editor, file, efObserver)
+        }
+        TestCase.assertEquals(candidates.size, filteredCandidates.size)
+        TestCase.assertEquals(filteredCandidates.size, efObserver.getNotifications().size)
+        efObserver.getNotifications().forEach {
+            TestCase.assertEquals(EFApplicationResult.OK, it.result)
+        }
+    }
+
+
+    /**
+     * In this case, there should be two candidates:
+     * 1. The AS_IS candidate should fail
+     * 2. The ADJUSTED candidate should succeed because it selects the first statement after the function's bracket
+     */
+    fun `test first line contains the function's open bracket`() {
+        configureByFile("/testdata/RodCuttingProblem.kt")
+        val efs = EFSuggestion(
+            functionName = "foo",
+            lineStart = 34,
+            lineEnd = 35
+        )
+        val efObserver = EFObserver()
+        val candidates = EFCandidateFactory().buildCandidates(efs, editor, file).toTypedArray()
+
+        candidates.forEach {
+            isCandidateExtractable(it, editor, file, efObserver)
+        }
+
+        TestCase.assertEquals(2, candidates.size)
+        TestCase.assertEquals(1, efObserver.getNotifications(EFApplicationResult.OK).size)
+        TestCase.assertEquals(1, efObserver.getNotifications(EFApplicationResult.FAIL).size)
+        TestCase.assertEquals(
+            EfCandidateType.ADJUSTED,
+            efObserver.getNotifications(EFApplicationResult.OK).get(0).candidate.type
+        )
+        TestCase.assertEquals(
+            EfCandidateType.AS_IS,
+            efObserver.getNotifications(EFApplicationResult.FAIL).get(0).candidate.type
+        )
+    }
+
+    /**
+     * With this test we are testing that even though, we have two suggestions,
+     * we only generate three distinct candidates, and not four. This is because
+     * the adjusted region is the same for both suggestions.
+     */
+    fun `test two suggestions generate two as-is and one adjusted candidates`() {
+        configureByFile("/testdata/ExtractMethodHelper.java")
+        val efSuggestions = listOf(
+            EFSuggestion(
+                functionName = "foo",
+                lineStart = 120,
+                lineEnd = 130
+            ),
+            EFSuggestion(
+                functionName = "foo",
+                lineStart = 135,
+                lineEnd = 145
+            )
+        )
+        val efCandidateFactory = EFCandidateFactory()
+        val candidates = efCandidateFactory.buildCandidates(efSuggestions, editor, file).toTypedArray()
+        TestCase.assertEquals(3, candidates.size)
+        TestCase.assertEquals(2, candidates.filter { it.type == EfCandidateType.AS_IS }.size)
+        TestCase.assertEquals(1, candidates.filter { it.type == EfCandidateType.ADJUSTED }.size)
+    }
+
+
+    /**
+     * The following suggestions should all result in candidates
+     * that should fail because they select the entire function to be extracted
+     */
+    fun `test entire function body is not extractable in Java code`() {
+        configureByFile("/testdata/KafkaAdminClientTest.java")
+        val efSuggestions = listOf(
+            EFSuggestion(
+                functionName = "foo",
+                lineStart = 124,
+                lineEnd = 127
+            ),
+            EFSuggestion(
+                functionName = "foo",
+                lineStart = 125,
+                lineEnd = 126
+            ),
+            EFSuggestion(
+                functionName = "foo",
+                lineStart = 130,
+                lineEnd = 133
+            ),
+            EFSuggestion(
+                functionName = "foo",
+                lineStart = 130,
+                lineEnd = 132
+            ),
+            EFSuggestion(
+                functionName = "foo",
+                lineStart = 131,
+                lineEnd = 133
+            ),
+            EFSuggestion(
+                functionName = "foo",
+                lineStart = 137,
+                lineEnd = 141
+            ),
+            EFSuggestion(
+                functionName = "foo",
+                lineStart = 145,
+                lineEnd = 148
+            )
+        )
+        val efCandidateFactory = EFCandidateFactory()
+        val efObserver = EFObserver()
+        val candidates = efCandidateFactory.buildCandidates(efSuggestions, editor, file).toTypedArray()
+        val filteredCandidates = candidates.filter {
+            isCandidateExtractable(it, editor, file, efObserver)
+        }
+
+        TestCase.assertTrue(filteredCandidates.isEmpty())
+        TestCase.assertEquals(8, efObserver.getNotifications().size)
+        efObserver.getNotifications().forEach {
+            TestCase.assertEquals(LLMBundle.message("extract.function.entire.function.selection.message"), it.reason)
+        }
+    }
+
+
+    /**
+     * The purpose of this is to test various situations in which either the beginning of the code region,
+     * or the end need to be "bubbled up" to be at the same level
+     * Java code
+     */
+    fun `test bubble up code selection in Java code`() {
+        configureByFile("/testdata/CommandLineLexer.java")
+        var efs = EFSuggestion(
+            functionName = "foo",
+            lineStart = 692,
+            lineEnd = 703
+        )
+        var adjustedCandidates = EFCandidateFactory().buildCandidates(efs, editor, file).toTypedArray()
+            .filter { it.type == EfCandidateType.ADJUSTED }
+        TestCase.assertEquals(1, adjustedCandidates.size)
+        TestCase.assertEquals(27130, adjustedCandidates.get(0).offsetStart)
+        TestCase.assertEquals(28942, adjustedCandidates.get(0).offsetEnd)
+
+        efs = EFSuggestion(
+            functionName = "foo",
+            lineStart = 692,
+            lineEnd = 699
+        )
+        adjustedCandidates = EFCandidateFactory().buildCandidates(efs, editor, file).toTypedArray()
+            .filter { it.type == EfCandidateType.ADJUSTED }
+        TestCase.assertEquals(1, adjustedCandidates.size)
+        TestCase.assertEquals(28465, adjustedCandidates.get(0).offsetStart)
+        TestCase.assertEquals(28923, adjustedCandidates.get(0).offsetEnd)
+
+        efs = EFSuggestion(
+            functionName = "foo",
+            lineStart = 692,
+            lineEnd = 707
+        )
+        adjustedCandidates = EFCandidateFactory().buildCandidates(efs, editor, file).toTypedArray()
+            .filter { it.type == EfCandidateType.ADJUSTED }
+        TestCase.assertEquals(1, adjustedCandidates.size)
+        TestCase.assertEquals(27099, adjustedCandidates.get(0).offsetStart)
+        TestCase.assertEquals(29039, adjustedCandidates.get(0).offsetEnd)
+
+        efs = EFSuggestion(
+            functionName = "foo",
+            lineStart = 644,
+            lineEnd = 647
+        )
+        adjustedCandidates = EFCandidateFactory().buildCandidates(efs, editor, file).toTypedArray()
+            .filter { it.type == EfCandidateType.ADJUSTED }
+        TestCase.assertEquals(1, adjustedCandidates.size)
+        TestCase.assertEquals(26640, adjustedCandidates.get(0).offsetStart)
+        TestCase.assertEquals(31913, adjustedCandidates.get(0).offsetEnd)
+    }
+
+    /**
+     * The purpose of this is to test various situations in which either the beginning of the code region,
+     * or the end need to be "bubbled up" to be at the same level
+     * Kotlin code
+     */
+    fun `test bubble up code selection in Kotlin code`() {
+        configureByFile("/testdata/RodCuttingProblem.kt")
+        var efs = EFSuggestion(
+            functionName = "foo",
+            lineStart = 10,
+            lineEnd = 14
+        )
+        var adjustedCandidates = EFCandidateFactory().buildCandidates(efs, editor, file).toTypedArray()
+            .filter { it.type == EfCandidateType.ADJUSTED }
+        TestCase.assertEquals(1, adjustedCandidates.size)
+        TestCase.assertEquals(321, adjustedCandidates.get(0).offsetStart)
+        TestCase.assertEquals(523, adjustedCandidates.get(0).offsetEnd)
+
+        efs = EFSuggestion(
+            functionName = "foo",
+            lineStart = 14,
+            lineEnd = 18
+        )
+        adjustedCandidates = EFCandidateFactory().buildCandidates(efs, editor, file).toTypedArray()
+            .filter { it.type == EfCandidateType.ADJUSTED }
+        TestCase.assertEquals(1, adjustedCandidates.size)
+        TestCase.assertEquals(339, adjustedCandidates.get(0).offsetStart)
+        TestCase.assertEquals(552, adjustedCandidates.get(0).offsetEnd)
+
+        efs = EFSuggestion(
+            functionName = "foo",
+            lineStart = 16,
+            lineEnd = 18
+        )
+        adjustedCandidates = EFCandidateFactory().buildCandidates(efs, editor, file).toTypedArray()
+            .filter { it.type == EfCandidateType.ADJUSTED }
+        TestCase.assertEquals(1, adjustedCandidates.size)
+        TestCase.assertEquals(339, adjustedCandidates.get(0).offsetStart)
+        TestCase.assertEquals(552, adjustedCandidates.get(0).offsetEnd)
     }
 }

@@ -17,3 +17,20 @@ fun rodCutting(price: IntArray): Int {
     }
     return value[price.size]
 }
+
+fun someRandomFunction(x: Int)
+{
+    val y = x + 1
+    val sum = y + x
+    return sum
+}
+
+fun randomFunction2(): Int {
+    val x = 2
+    val prod = x*x
+    return prod }
+
+fun randomFunction3(): Int
+{   val x = 2
+    val prod = x*x
+    return prod }

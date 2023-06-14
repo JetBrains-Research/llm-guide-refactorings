@@ -48,3 +48,11 @@ internal fun showRequestFailedNotification(project: Project, message: String) {
         NotificationType.WARNING
     ).notify(project)
 }
+
+internal fun showEFNotification(project: Project, message: String, notificationType: NotificationType) {
+    createNotificationGroup().createNotification(
+        LLMBundle.message("notification.extract.function.with.llm.title"),
+        message,
+        notificationType
+    ).notify(project)
+}

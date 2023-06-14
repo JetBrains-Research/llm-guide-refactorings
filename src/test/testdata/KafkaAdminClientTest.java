@@ -120,4 +120,30 @@ public class KafkaAdminClientTest {
             }
         }
     }
+
+    private int foo1() {
+        int x = 0;
+        return x
+    }
+
+    private int foo2()
+    {
+        int x = 0;
+        return x
+    }
+
+    private int foo3()
+    {
+        {
+            int y = 10;
+        }
+        int x = 0;
+        return x;
+    }
+
+    private int foo4() {
+        int x = 0;
+        int y = 2;
+        int sum = x + y;
+        return sum; }
 }

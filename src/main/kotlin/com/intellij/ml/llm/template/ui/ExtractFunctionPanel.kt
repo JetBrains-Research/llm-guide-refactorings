@@ -1,6 +1,7 @@
 package com.intellij.ml.llm.template.ui
 
 import com.intellij.codeInsight.unwrap.ScopeHighlighter
+import com.intellij.lang.java.JavaLanguage
 import com.intellij.ml.llm.template.LLMBundle
 import com.intellij.ml.llm.template.extractfunction.EFCandidate
 import com.intellij.ml.llm.template.models.FunctionNameProvider
@@ -12,8 +13,10 @@ import com.intellij.openapi.keymap.KeymapUtil
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.JBPopup
 import com.intellij.openapi.util.TextRange
+import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiMethod
+import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.refactoring.extractMethod.newImpl.MethodExtractor
 import com.intellij.refactoring.ui.MethodSignatureComponent
 import com.intellij.ui.components.JBScrollPane
@@ -22,6 +25,16 @@ import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.table.JBTable
 import com.intellij.util.ui.JBDimension
 import com.intellij.util.ui.JBUI
+import org.jetbrains.annotations.Nls
+import org.jetbrains.kotlin.idea.KotlinLanguage
+import org.jetbrains.kotlin.idea.base.psi.unifier.toRange
+import org.jetbrains.kotlin.idea.refactoring.introduce.extractionEngine.*
+import org.jetbrains.kotlin.psi.KtBlockExpression
+import org.jetbrains.kotlin.psi.KtFile
+import org.jetbrains.kotlin.psi.KtNamedFunction
+import org.jetbrains.kotlin.psi.psiUtil.elementsInRange
+import org.jetbrains.kotlin.utils.addToStdlib.UnsafeCastFunction
+import org.jetbrains.kotlin.utils.addToStdlib.safeAs
 import java.awt.Dimension
 import java.awt.event.KeyEvent
 import java.awt.event.MouseEvent
@@ -206,7 +219,7 @@ class ExtractFunctionPanel(
         // Add the parameters
         builder.append("(")
         psiMethod.parameterList.parameters.joinTo(
-            builder,
+            buffer = builder,
             separator = ", \n\t"
         ) { "${it.type.presentableText} ${it.name}" }
         builder.append(")")
@@ -223,16 +236,74 @@ class ExtractFunctionPanel(
     }
 
 
+    @OptIn(UnsafeCastFunction::class)
     private fun generateFunctionSignature(efCandidate: EFCandidate): String {
-        var signature = ""
-        MyMethodExtractor(FunctionNameProvider(efCandidate.functionName)).findAndSelectExtractOption(
-            myEditor,
-            myFile,
-            TextRange(efCandidate.offsetStart, efCandidate.offsetEnd)
-        )?.thenApply { options ->
-            val elementsToReplace = MethodExtractor().prepareRefactoringElements(options)
-            elementsToReplace.method.setName(efCandidate.functionName)
-            signature = generateFunctionSignature(elementsToReplace.method)
+        var signature = LLMBundle.message("ef.candidates.popup.cannot.compute.function.signature")
+        when (myFile.language) {
+            JavaLanguage.INSTANCE ->
+                MyMethodExtractor(FunctionNameProvider(efCandidate.functionName)).findAndSelectExtractOption(
+                    myEditor,
+                    myFile,
+                    TextRange(efCandidate.offsetStart, efCandidate.offsetEnd)
+                )?.thenApply { options ->
+                    val elementsToReplace = MethodExtractor().prepareRefactoringElements(options)
+                    elementsToReplace.method.setName(efCandidate.functionName)
+                    signature = generateFunctionSignature(elementsToReplace.method)
+                }
+
+            KotlinLanguage.INSTANCE -> {
+                fun computeKotlinFunctionSignature(
+                    functionName: String,
+                    file: KtFile,
+                    elements: List<PsiElement>,
+                    targetSibling: PsiElement
+                ): @Nls String {
+                    var signature = LLMBundle.message("ef.candidates.popup.cannot.compute.function.signature")
+                    val adjustedElements = elements.singleOrNull().safeAs<KtBlockExpression>()?.statements ?: elements
+                    val extractionData = ExtractionData(file, adjustedElements.toRange(false), targetSibling)
+                    val analysisResult = extractionData.performAnalysis()
+                    if (analysisResult.status == AnalysisResult.Status.SUCCESS) {
+                        val config = ExtractionGeneratorConfiguration(
+                            analysisResult.descriptor!!,
+                            ExtractionGeneratorOptions(
+                                inTempFile = true,
+                                target = ExtractionTarget.FUNCTION,
+                                dummyName = functionName,
+                            )
+                        )
+                        signature = config.getDeclarationPattern()
+                        signature = signature.replace("$0", "\t...")
+                        signature = signature.replace(", ", ",\n\t")
+                    }
+
+                    return signature
+                }
+
+                fun getAllElementsInRange(psiFile: PsiFile, startOffset: Int, endOffset: Int): List<PsiElement> {
+                    val elements = mutableListOf<PsiElement>()
+
+                    val startElement = psiFile.findElementAt(startOffset)
+                    val endElement = psiFile.findElementAt(endOffset)
+
+                    if (startElement != null && endElement != null) {
+                        psiFile.elementsInRange(TextRange(startOffset, endOffset)).forEach {
+                            elements.add(it)
+                        }
+                    }
+
+                    return elements
+                }
+
+                fun getParentKtFunction(element: PsiElement): KtNamedFunction? {
+                    return PsiTreeUtil.getParentOfType(element, KtNamedFunction::class.java)
+                }
+
+                val elements = getAllElementsInRange(myFile, efCandidate.offsetStart, efCandidate.offsetEnd)
+                val targetSibling = getParentKtFunction(elements[0])
+                if (targetSibling != null) {
+                    signature = computeKotlinFunctionSignature(efCandidate.functionName, myFile as KtFile, elements, targetSibling)
+                }
+            }
         }
         return signature
     }

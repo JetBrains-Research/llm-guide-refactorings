@@ -16,7 +16,6 @@ import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.Editor
-import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
@@ -31,6 +30,7 @@ import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.psi.util.PsiUtilBase
 import com.intellij.ui.awt.RelativePoint
 import java.awt.Point
+import java.awt.Rectangle
 import java.util.concurrent.atomic.AtomicReference
 
 
@@ -189,12 +189,11 @@ abstract class ApplyExtractFunctionTransformationIntention(
         // set the popup as delegate to the Extract Function panel
         efPanel.setDelegatePopup(efPopup)
 
-        // Get the current editor and calculate the point at the top right corner
-        val currentEditor = EditorFactory.getInstance().allEditors[0]
-        val topRightPoint = Point(currentEditor.component.width - panel.preferredSize.width, 0)
-
         // Show the popup at the top right corner of the current editor
-        efPopup.show(RelativePoint(currentEditor.component, topRightPoint))
+        val contentComponent = editor.contentComponent
+        val visibleRect: Rectangle = contentComponent.visibleRect
+        val point = Point(visibleRect.x + visibleRect.width - 500, visibleRect.y)
+        efPopup.show(RelativePoint(contentComponent, point))
     }
 
     private fun getParentNamedElement(editor: Editor): PsiNameIdentifierOwner? {

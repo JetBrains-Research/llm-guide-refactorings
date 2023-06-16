@@ -92,11 +92,11 @@ fun isCandidateExtractable(
     efCandidate: EFCandidate,
     editor: Editor,
     file: PsiFile,
-    observer: Observer? = null
+    observerList: List<Observer> = emptyList()
 ): Boolean {
     when (file.language) {
-        JavaLanguage.INSTANCE -> return isFunctionExtractableJava(efCandidate, editor, file, observer)
-        KotlinLanguage.INSTANCE -> return isSelectionExtractableKotlin(efCandidate, editor, file, observer)
+        JavaLanguage.INSTANCE -> return isFunctionExtractableJava(efCandidate, editor, file, observerList)
+        KotlinLanguage.INSTANCE -> return isSelectionExtractableKotlin(efCandidate, editor, file, observerList)
     }
     return false
 }
@@ -105,32 +105,40 @@ private fun isFunctionExtractableJava(
     efCandidate: EFCandidate,
     editor: Editor,
     file: PsiFile,
-    observer: Observer?
+    observerList: List<Observer>
 ): Boolean {
     editor.selectionModel.setSelection(efCandidate.offsetStart, efCandidate.offsetEnd)
     val range = ExtractMethodHelper.findEditorSelection(editor)
     val elements = ExtractSelector().suggestElementsToExtract(file, range!!)
 
     if (selectionIsEntireBodyFunctionJava(efCandidate, editor, file)) {
-        observer?.update(
-            EFNotification(
-                result = EFApplicationResult.FAIL,
-                candidate = efCandidate,
-                reason = LLMBundle.message("extract.function.entire.function.selection.message"),
+        observerList.forEach {
+            it.update(
+                EFNotification(
+                    EFCandidateApplicationPayload(
+                        result = EFApplicationResult.FAIL,
+                        candidate = efCandidate,
+                        reason = LLMBundle.message("extract.function.entire.function.selection.message"),
+                    )
+                )
             )
-        )
+        }
         editor.selectionModel.removeSelection()
         return false
     }
 
     if (elements.isEmpty()) {
-        observer?.update(
-            EFNotification(
-                result = EFApplicationResult.FAIL,
-                candidate = efCandidate,
-                reason = LLMBundle.message("extract.function.code.not.extractable.message"),
+        observerList.forEach {
+            it.update(
+                EFNotification(
+                    EFCandidateApplicationPayload(
+                        result = EFApplicationResult.FAIL,
+                        candidate = efCandidate,
+                        reason = LLMBundle.message("extract.function.code.not.extractable.message"),
+                    )
+                )
             )
-        )
+        }
         editor.selectionModel.removeSelection()
         return false
     }
@@ -143,25 +151,33 @@ private fun isFunctionExtractableJava(
     } catch (e: Exception) {
         logException(e)
         reason = e.message ?: reason
-        observer?.update(
-            EFNotification(
-                result = EFApplicationResult.FAIL,
-                candidate = efCandidate,
-                reason = reason
+        observerList.forEach {
+            it.update(
+                EFNotification(
+                    EFCandidateApplicationPayload(
+                        result = EFApplicationResult.FAIL,
+                        candidate = efCandidate,
+                        reason = reason
+                    )
+                )
             )
-        )
+        }
         editor.selectionModel.removeSelection()
         return false
     }
 
 
-    observer?.update(
-        EFNotification(
-            result = if (allOptionsToExtract.isNotEmpty()) EFApplicationResult.OK else EFApplicationResult.FAIL,
-            candidate = efCandidate,
-            reason = reason
+    observerList.forEach {
+        it.update(
+            EFNotification(
+                EFCandidateApplicationPayload(
+                    result = if (allOptionsToExtract.isNotEmpty()) EFApplicationResult.OK else EFApplicationResult.FAIL,
+                    candidate = efCandidate,
+                    reason = reason
+                )
+            )
         )
-    )
+    }
     editor.selectionModel.removeSelection()
 
     return allOptionsToExtract.isNotEmpty()
@@ -171,20 +187,24 @@ private fun isSelectionExtractableKotlin(
     efCandidate: EFCandidate,
     editor: Editor,
     file: PsiFile,
-    observer: Observer?
+    observerList: List<Observer>
 ): Boolean {
     editor.selectionModel.setSelection(efCandidate.offsetStart, efCandidate.offsetEnd)
     var res = false
     var reason = ""
 
     if (selectionIsEntireBodyFunctionKotlin(efCandidate, editor, file)) {
-        observer?.update(
-            EFNotification(
-                result = EFApplicationResult.FAIL,
-                candidate = efCandidate,
-                reason = LLMBundle.message("extract.function.entire.function.selection.message")
+        observerList.forEach {
+            it.update(
+                EFNotification(
+                    EFCandidateApplicationPayload(
+                        result = EFApplicationResult.FAIL,
+                        candidate = efCandidate,
+                        reason = LLMBundle.message("extract.function.entire.function.selection.message")
+                    )
+                )
             )
-        )
+        }
         editor.selectionModel.removeSelection()
         return false
     }
@@ -201,13 +221,17 @@ private fun isSelectionExtractableKotlin(
         reason = e.message ?: reason
     }
 
-    observer?.update(
-        EFNotification(
-            result = if (res) EFApplicationResult.OK else EFApplicationResult.FAIL,
-            candidate = efCandidate,
-            reason = reason
+    observerList.forEach {
+        it.update(
+            EFNotification(
+                EFCandidateApplicationPayload(
+                    result = if (res) EFApplicationResult.OK else EFApplicationResult.FAIL,
+                    candidate = efCandidate,
+                    reason = reason
+                )
+            )
         )
-    )
+    }
     editor.selectionModel.removeSelection()
     return res
 }

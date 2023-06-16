@@ -287,11 +287,11 @@ class EFCandidateFactoryTest : LightPlatformCodeInsightTestCase() {
             EFCandidateFactory().buildCandidates(efSuggestions, editor, file)
                 .toTypedArray()
                 .filter {
-                    isCandidateExtractable(it, editor, file, efObserver)
+                    isCandidateExtractable(it, editor, file, listOf(efObserver))
                 }
         TestCase.assertTrue(filteredCandidates.isEmpty())
         efObserver.getNotifications().forEach {
-            TestCase.assertEquals(LLMBundle.message("extract.function.entire.function.selection.message"), it.reason)
+            TestCase.assertEquals(LLMBundle.message("extract.function.entire.function.selection.message"), (it.payload as EFCandidateApplicationPayload).reason)
         }
     }
 
@@ -312,12 +312,12 @@ class EFCandidateFactoryTest : LightPlatformCodeInsightTestCase() {
         val efObserver = EFObserver()
         val candidates = EFCandidateFactory().buildCandidates(efSuggestions, editor, file).toTypedArray()
         val filteredCandidates = candidates.filter {
-            isCandidateExtractable(it, editor, file, efObserver)
+            isCandidateExtractable(it, editor, file, listOf(efObserver))
         }
         TestCase.assertEquals(candidates.size, filteredCandidates.size)
         TestCase.assertEquals(filteredCandidates.size, efObserver.getNotifications().size)
         efObserver.getNotifications().forEach {
-            TestCase.assertEquals(EFApplicationResult.OK, it.result)
+            TestCase.assertEquals(EFApplicationResult.OK, (it.payload as EFCandidateApplicationPayload).result)
         }
     }
 
@@ -338,19 +338,23 @@ class EFCandidateFactoryTest : LightPlatformCodeInsightTestCase() {
         val candidates = EFCandidateFactory().buildCandidates(efs, editor, file).toTypedArray()
 
         candidates.forEach {
-            isCandidateExtractable(it, editor, file, efObserver)
+            isCandidateExtractable(it, editor, file, listOf(efObserver))
         }
 
         TestCase.assertEquals(2, candidates.size)
         TestCase.assertEquals(1, efObserver.getNotifications(EFApplicationResult.OK).size)
         TestCase.assertEquals(1, efObserver.getNotifications(EFApplicationResult.FAIL).size)
+
+        val successPayload = efObserver.getNotifications(EFApplicationResult.OK).get(0).payload as EFCandidateApplicationPayload
+        val failPayload = efObserver.getNotifications(EFApplicationResult.FAIL).get(0).payload as EFCandidateApplicationPayload
+
         TestCase.assertEquals(
             EfCandidateType.ADJUSTED,
-            efObserver.getNotifications(EFApplicationResult.OK).get(0).candidate.type
+            successPayload.candidate.type
         )
         TestCase.assertEquals(
             EfCandidateType.AS_IS,
-            efObserver.getNotifications(EFApplicationResult.FAIL).get(0).candidate.type
+            failPayload.candidate.type
         )
     }
 
@@ -428,13 +432,13 @@ class EFCandidateFactoryTest : LightPlatformCodeInsightTestCase() {
         val efObserver = EFObserver()
         val candidates = efCandidateFactory.buildCandidates(efSuggestions, editor, file).toTypedArray()
         val filteredCandidates = candidates.filter {
-            isCandidateExtractable(it, editor, file, efObserver)
+            isCandidateExtractable(it, editor, file, listOf(efObserver))
         }
 
         TestCase.assertTrue(filteredCandidates.isEmpty())
         TestCase.assertEquals(8, efObserver.getNotifications().size)
         efObserver.getNotifications().forEach {
-            TestCase.assertEquals(LLMBundle.message("extract.function.entire.function.selection.message"), it.reason)
+            TestCase.assertEquals(LLMBundle.message("extract.function.entire.function.selection.message"), (it.payload as EFCandidateApplicationPayload).reason)
         }
     }
 

@@ -18,7 +18,7 @@ import org.jetbrains.kotlin.utils.addIfNotNull
 
 class CodeTransformer : Observable {
     private val logger = Logger.getInstance("#com.intellij.ml.llm")
-    private val observers = mutableListOf<Observer>()
+    private val observers = mutableListOf<Any>()
 
     fun applyCandidate(efCandidate: EFCandidate, project: Project, editor: Editor, file: PsiFile): Boolean {
         var applicationResult = EFApplicationResult.OK
@@ -42,11 +42,14 @@ class CodeTransformer : Observable {
 
         notifyObservers(
             EFNotification(
-                result = applicationResult,
-                reason = reason,
-                candidate = efCandidate
+                EFCandidateApplicationPayload(
+                    result = applicationResult,
+                    reason = reason,
+                    candidate = efCandidate
+                )
             )
         )
+
         return applicationResult == EFApplicationResult.OK
     }
 
@@ -108,8 +111,8 @@ class CodeTransformer : Observable {
     }
 
     override fun notifyObservers(notification: EFNotification) {
-        observers.forEach { observer ->
-            observer.update(notification)
+        observers.forEach {
+            (it as Observer).update(notification)
         }
     }
 }

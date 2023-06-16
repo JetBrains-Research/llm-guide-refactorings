@@ -120,10 +120,12 @@ class UtilsTest : LightPlatformCodeInsightTestCase() {
         val candidates = EFCandidateFactory().buildCandidates(efSuggestion, editor, file).toTypedArray()
         TestCase.assertEquals(2, candidates.size)
 
-        candidates.forEach { isCandidateExtractable(it, editor, file, efObserver) }
+        candidates.forEach { isCandidateExtractable(it, editor, file, listOf(efObserver)) }
         val notifications = efObserver.getNotifications()
         TestCase.assertEquals(2, notifications.size)
-        TestCase.assertEquals(EFApplicationResult.OK, notifications.get(0).result)
-        TestCase.assertEquals(EFApplicationResult.FAIL, notifications.get(1).result)
+        val firstNotifPayload = notifications[0].payload as EFCandidateApplicationPayload
+        val secondNotifPayload = notifications[1].payload as EFCandidateApplicationPayload
+        TestCase.assertEquals(EFApplicationResult.OK, firstNotifPayload.result)
+        TestCase.assertEquals(EFApplicationResult.FAIL, secondNotifPayload.result)
     }
 }

@@ -6,6 +6,8 @@ import com.intellij.ml.llm.template.LLMBundle
 import com.intellij.ml.llm.template.extractfunction.EFCandidate
 import com.intellij.ml.llm.template.models.FunctionNameProvider
 import com.intellij.ml.llm.template.models.MyMethodExtractor
+import com.intellij.ml.llm.template.telemetry.EFTelemetryDataManager
+import com.intellij.ml.llm.template.telemetry.EFTelemetryDataUtils
 import com.intellij.ml.llm.template.utils.CodeTransformer
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.editor.Editor
@@ -51,7 +53,8 @@ class ExtractFunctionPanel(
     file: PsiFile,
     candidates: List<EFCandidate>,
     codeTransformer: CodeTransformer,
-    highlighter: AtomicReference<ScopeHighlighter>
+    highlighter: AtomicReference<ScopeHighlighter>,
+    efTelemetryDataManager: EFTelemetryDataManager? = null
 ) {
     val myExtractFunctionsCandidateTable: JBTable
     private val myExtractFunctionsScrollPane: JBScrollPane
@@ -63,6 +66,7 @@ class ExtractFunctionPanel(
     private val myCodeTransformer = codeTransformer
     private val myFile = file
     private val myHighlighter = highlighter
+    private val myEFTelemetryDataManager = efTelemetryDataManager
 
     init {
         val tableModel = buildTableModel(myCandidates)
@@ -91,7 +95,7 @@ class ExtractFunctionPanel(
                 if (e.keyCode == KeyEvent.VK_ENTER) {
                     if (e.id == KeyEvent.KEY_PRESSED) {
                         if (!isEditing && e.modifiersEx == 0) {
-                            doExtractMethod(myCandidates[selectedRow])
+                            doExtractMethod(selectedRow)
                         }
                     }
                     e.consume()
@@ -107,7 +111,7 @@ class ExtractFunctionPanel(
 
             override fun processMouseEvent(e: MouseEvent?) {
                 if (e != null && e.clickCount == 2) {
-                    doExtractMethod(myCandidates[selectedRow])
+                    doExtractMethod(selectedRow)
                 }
                 super.processMouseEvent(e)
             }
@@ -193,7 +197,7 @@ class ExtractFunctionPanel(
             row {
                 button(LLMBundle.message("ef.candidates.popup.extract.function.button.title"), actionListener = {
                     myPopup?.closeOk(null)
-                    doExtractMethod(myCandidates[myExtractFunctionsCandidateTable.selectedRow])
+                    doExtractMethod(myExtractFunctionsCandidateTable.selectedRow)
                 }).comment(
                     LLMBundle.message(
                         "ef.candidates.popup.invoke.extract.function",
@@ -301,18 +305,37 @@ class ExtractFunctionPanel(
                 val elements = getAllElementsInRange(myFile, efCandidate.offsetStart, efCandidate.offsetEnd)
                 val targetSibling = getParentKtFunction(elements[0])
                 if (targetSibling != null) {
-                    signature = computeKotlinFunctionSignature(efCandidate.functionName, myFile as KtFile, elements, targetSibling)
+                    signature = computeKotlinFunctionSignature(
+                        efCandidate.functionName,
+                        myFile as KtFile,
+                        elements,
+                        targetSibling
+                    )
                 }
             }
         }
         return signature
     }
 
-    fun doExtractMethod(efCandidate: EFCandidate) {
+    private fun doExtractMethod(index: Int) {
+        addSelectionToTelemetryData(index)
+        val efCandidate = myCandidates[index]
         myPopup!!.cancel()
         val runnable = Runnable {
             myCodeTransformer.applyCandidate(efCandidate, myProject, myEditor, myFile)
         }
         runnable.run()
+    }
+
+    private fun addSelectionToTelemetryData(index: Int) {
+        val efCandidate = myCandidates[index]
+        val hostFunctionTelemetryData = myEFTelemetryDataManager?.getData()?.hostFunctionTelemetryData
+        myEFTelemetryDataManager?.addUserSelectionTelemetryData(
+            EFTelemetryDataUtils.buildUserSelectionTelemetryData(
+                efCandidate,
+                index,
+                hostFunctionTelemetryData
+            )
+        )
     }
 }

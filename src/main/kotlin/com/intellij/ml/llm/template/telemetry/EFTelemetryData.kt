@@ -5,6 +5,11 @@ import com.intellij.ml.llm.template.extractfunction.EFCandidate
 import com.intellij.ml.llm.template.extractfunction.EfCandidateType
 import com.intellij.ml.llm.template.utils.EFApplicationResult
 import com.intellij.ml.llm.template.utils.EFCandidateApplicationPayload
+import com.intellij.openapi.util.TextRange
+import com.intellij.psi.PsiFile
+import com.intellij.psi.PsiWhiteSpace
+import com.intellij.psi.util.elementType
+import org.jetbrains.kotlin.psi.psiUtil.elementsInRange
 import java.util.*
 
 data class EFTelemetryData(
@@ -78,6 +83,17 @@ data class EFUserSelectionTelemetryData(
 
     @SerializedName("candidateType")
     var candidateType: EfCandidateType,
+
+    @SerializedName("elementsType")
+    var elementsType: List<EFPsiElementsTypesTelemetryData>
+)
+
+data class EFPsiElementsTypesTelemetryData(
+    @SerializedName("elementType")
+    var type: String,
+
+    @SerializedName("quantity")
+    var quantity: Int,
 )
 
 class EFTelemetryDataManager {
@@ -120,7 +136,11 @@ class EFTelemetryDataManager {
 
 class EFTelemetryDataUtils {
     companion object {
-        fun buildHostFunctionTelemetryData(codeSnippet: String, lineStart: Int, bodyLineStart: Int): EFHostFunctionTelemetryData {
+        fun buildHostFunctionTelemetryData(
+            codeSnippet: String,
+            lineStart: Int,
+            bodyLineStart: Int
+        ): EFHostFunctionTelemetryData {
             val functionSize = codeSnippet.lines().size
             return EFHostFunctionTelemetryData(
                 lineStart = lineStart,
@@ -153,6 +173,7 @@ class EFTelemetryDataUtils {
             efCandidate: EFCandidate,
             candidateIndex: Int,
             hostFunctionTelemetryData: EFHostFunctionTelemetryData?,
+            file: PsiFile
         ): EFUserSelectionTelemetryData {
             var positionInHostFunction = -1
             if (hostFunctionTelemetryData != null) {
@@ -164,8 +185,25 @@ class EFTelemetryDataUtils {
                 functionSize = efCandidate.lineEnd - efCandidate.lineStart + 1,
                 positionInHostFunction = positionInHostFunction,
                 selectedCandidateIndex = candidateIndex,
-                candidateType = efCandidate.type
+                candidateType = efCandidate.type,
+                elementsType = EFTelemetryDataUtils.buildElementsTypeTelemetryData(efCandidate, file)
             )
+        }
+
+        fun buildElementsTypeTelemetryData(
+            efCandidate: EFCandidate,
+            file: PsiFile
+        ): List<EFPsiElementsTypesTelemetryData> {
+            val psiElements = file.elementsInRange(TextRange(efCandidate.offsetStart, efCandidate.offsetEnd))
+            val namesList = psiElements.filter { it !is PsiWhiteSpace }.map { it.elementType.toString() }
+            val namesQuantityMap = namesList.groupingBy { it }.eachCount()
+            val result = namesQuantityMap.entries.map {
+                EFPsiElementsTypesTelemetryData(
+                    type = it.key,
+                    quantity = it.value
+                )
+            }
+            return result
         }
     }
 }

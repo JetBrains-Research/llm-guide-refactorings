@@ -7,10 +7,15 @@ import com.intellij.ml.llm.template.utils.EFApplicationResult
 import com.intellij.ml.llm.template.utils.EFCandidateApplicationPayload
 import com.intellij.ml.llm.template.utils.EFCandidatesApplicationTelemetryObserver
 import com.intellij.ml.llm.template.utils.EFNotification
-import com.intellij.testFramework.fixtures.BasePlatformTestCase
+import com.intellij.testFramework.LightPlatformCodeInsightTestCase
 import junit.framework.TestCase
 
-class EFTelemetryDataTest : BasePlatformTestCase() {
+class EFTelemetryDataTest : LightPlatformCodeInsightTestCase() {
+    private var projectPath = "src/test"
+    override fun getTestDataPath(): String {
+        return projectPath
+    }
+
     fun `test telemetry data collection sessions`() {
         val manager = EFTelemetryDataManager()
         val firstSessionId = manager.newSession()
@@ -78,7 +83,8 @@ class EFTelemetryDataTest : BasePlatformTestCase() {
             functionSize = 100,
             positionInHostFunction = 10,
             selectedCandidateIndex = 0,
-            candidateType = EfCandidateType.ADJUSTED
+            candidateType = EfCandidateType.ADJUSTED,
+            elementsType = emptyList()
         )
 
         manager
@@ -119,5 +125,22 @@ class EFTelemetryDataTest : BasePlatformTestCase() {
                 bodyLineStart = 6
             )
         )
+    }
+
+    fun `test get psi elements names Kotlin`() {
+        configureByFile("/testdata/RodCuttingProblem.kt")
+        val efCandidate = EFCandidate(
+            functionName = "foo",
+            offsetStart = 321,
+            offsetEnd = 523,
+            lineStart = 10,
+            lineEnd = 17
+        )
+
+        val psiElementsTelemetryData = EFTelemetryDataUtils.buildElementsTypeTelemetryData(efCandidate, file)
+
+        TestCase.assertEquals(2, psiElementsTelemetryData.size)
+        TestCase.assertTrue(psiElementsTelemetryData.contains(EFPsiElementsTypesTelemetryData("BINARY_EXPRESSION", 1)))
+        TestCase.assertTrue(psiElementsTelemetryData.contains(EFPsiElementsTypesTelemetryData("FOR", 1)))
     }
 }

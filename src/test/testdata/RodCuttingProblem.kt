@@ -34,3 +34,29 @@ fun randomFunction3(): Int
 {   val x = 2
     val prod = x*x
     return prod }
+
+
+private fun MockProject.replaceReflektQueries(
+    config: PluginConfig,
+    instancesAnalyzer: IrInstancesAnalyzer,
+    libraryArgumentsWithInstances: LibraryArgumentsWithInstances,
+) {
+    // Extract reflekt arguments from external libraries
+    IrGenerationExtension.registerExtension(
+        this,
+        ExternalLibraryInstancesCollectorExtension(
+            irInstancesAnalyzer = instancesAnalyzer,
+            irInstancesFqNames = libraryArgumentsWithInstances.instances,
+        ),
+    )
+    generateReflektImpl(config, instancesAnalyzer, libraryArgumentsWithInstances)
+
+    IrGenerationExtension.registerExtension(
+        this,
+        SmartReflektIrGenerationExtension(
+            irInstancesAnalyzer = instancesAnalyzer,
+            classpath = config.dependencyJars,
+            messageCollector = config.messageCollector,
+        ),
+    )
+}

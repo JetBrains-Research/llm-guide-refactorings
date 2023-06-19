@@ -98,7 +98,7 @@ class EFCandidateFactoryTest : LightPlatformCodeInsightTestCase() {
         efCandidates.addAll(candidateFactory.buildCandidates(efs1, editor, file))
         efCandidates.addAll(candidateFactory.buildCandidates(efs2, editor, file))
 
-        TestCase.assertEquals(3, efCandidates.size)
+        TestCase.assertEquals(2, efCandidates.size)
 
         val codeTransformer = CodeTransformer()
         val workingEFCandidates = ArrayList<EFCandidate>()
@@ -291,7 +291,10 @@ class EFCandidateFactoryTest : LightPlatformCodeInsightTestCase() {
                 }
         TestCase.assertTrue(filteredCandidates.isEmpty())
         efObserver.getNotifications().forEach {
-            TestCase.assertEquals(LLMBundle.message("extract.function.entire.function.selection.message"), (it.payload as EFCandidateApplicationPayload).reason)
+            TestCase.assertEquals(
+                LLMBundle.message("extract.function.entire.function.selection.message"),
+                (it.payload as EFCandidateApplicationPayload).reason
+            )
         }
     }
 
@@ -345,8 +348,10 @@ class EFCandidateFactoryTest : LightPlatformCodeInsightTestCase() {
         TestCase.assertEquals(1, efObserver.getNotifications(EFApplicationResult.OK).size)
         TestCase.assertEquals(1, efObserver.getNotifications(EFApplicationResult.FAIL).size)
 
-        val successPayload = efObserver.getNotifications(EFApplicationResult.OK).get(0).payload as EFCandidateApplicationPayload
-        val failPayload = efObserver.getNotifications(EFApplicationResult.FAIL).get(0).payload as EFCandidateApplicationPayload
+        val successPayload =
+            efObserver.getNotifications(EFApplicationResult.OK).get(0).payload as EFCandidateApplicationPayload
+        val failPayload =
+            efObserver.getNotifications(EFApplicationResult.FAIL).get(0).payload as EFCandidateApplicationPayload
 
         TestCase.assertEquals(
             EfCandidateType.ADJUSTED,
@@ -438,7 +443,10 @@ class EFCandidateFactoryTest : LightPlatformCodeInsightTestCase() {
         TestCase.assertTrue(filteredCandidates.isEmpty())
         TestCase.assertEquals(8, efObserver.getNotifications().size)
         efObserver.getNotifications().forEach {
-            TestCase.assertEquals(LLMBundle.message("extract.function.entire.function.selection.message"), (it.payload as EFCandidateApplicationPayload).reason)
+            TestCase.assertEquals(
+                LLMBundle.message("extract.function.entire.function.selection.message"),
+                (it.payload as EFCandidateApplicationPayload).reason
+            )
         }
     }
 
@@ -534,5 +542,128 @@ class EFCandidateFactoryTest : LightPlatformCodeInsightTestCase() {
         TestCase.assertEquals(1, adjustedCandidates.size)
         TestCase.assertEquals(339, adjustedCandidates.get(0).offsetStart)
         TestCase.assertEquals(552, adjustedCandidates.get(0).offsetEnd)
+    }
+
+    /**
+     * When a suggestion startLine and endLine belong to two different functions,
+     * no adjusted candidate should be generated
+     */
+    fun `test cross functions suggestion in Kotlin code`() {
+        configureByFile("/testdata/RodCuttingProblem.kt")
+        val suggestions = listOf(
+            EFSuggestion(
+                functionName = "foo",
+                lineStart = 14, // function 1
+                lineEnd = 24    // function 2
+            ),
+            EFSuggestion(
+                functionName = "foo",
+                lineStart = 20, // file
+                lineEnd = 27    // file
+            )
+        )
+
+        val candidates = EFCandidateFactory().buildCandidates(suggestions, editor, file).toTypedArray()
+        TestCase.assertEquals(suggestions.size, candidates.size)
+        candidates.forEach { TestCase.assertEquals(EfCandidateType.AS_IS, it.type) }
+    }
+
+    /**
+     * When a suggestion startLine and endLine belong to two different functions,
+     * no adjusted candidate should be generated
+     */
+    fun `test cross functions suggestion in Java code`() {
+        configureByFile("/testdata/KafkaAdminClientTest.java")
+        val suggestions = listOf(
+            EFSuggestion(
+                functionName = "foo",
+                lineStart = 140,    // function 1
+                lineEnd = 146       // function 2
+            ),
+            EFSuggestion(
+                functionName = "foo",
+                lineStart = 134,    // class
+                lineEnd = 139       // function
+            ),
+            EFSuggestion(
+                functionName = "foo",
+                lineStart = 123,    // class
+                lineEnd = 149       // class
+            )
+        )
+
+        val candidates = EFCandidateFactory().buildCandidates(suggestions, editor, file).toTypedArray()
+        TestCase.assertEquals(suggestions.size, candidates.size)
+        candidates.forEach { TestCase.assertEquals(EfCandidateType.AS_IS, it.type) }
+    }
+
+    /**
+     * Test when lineStart/lineEnd falls in a middle of parameter list of a function call
+     */
+    fun `test suggestion within parameter list of function call Kotlin`() {
+        configureByFile("/testdata/ReflektComponentRegistrar.kt")
+        val efs = EFSuggestion(
+            functionName = "foo",
+            lineStart = 137,
+            lineEnd = 142
+        )
+        val candidates = EFCandidateFactory().buildCandidates(efs, editor, file).toTypedArray()
+        val adjustedCandidates = candidates.filter { it.type == EfCandidateType.ADJUSTED }
+        TestCase.assertEquals(1, adjustedCandidates.size)
+        TestCase.assertEquals(6795, adjustedCandidates[0].offsetStart)
+        TestCase.assertEquals(7093, adjustedCandidates[0].offsetEnd)
+    }
+
+    /**
+     * Test when lineStart/lineEnd falls in a middle of parameter list of a function call
+     */
+    fun `test suggestion within parameter list of function call Java`() {
+        configureByFile("/testdata/KafkaAdminClientTest.java")
+        val efs = EFSuggestion(
+            functionName = "foo",
+            lineStart = 31,
+            lineEnd = 46
+        )
+        val candidates = EFCandidateFactory().buildCandidates(efs, editor, file).toTypedArray()
+        val adjustedCandidates = candidates.filter { it.type == EfCandidateType.ADJUSTED }
+        TestCase.assertEquals(1, adjustedCandidates.size)
+        TestCase.assertEquals(1784, adjustedCandidates[0].offsetStart)
+        TestCase.assertEquals(3427, adjustedCandidates[0].offsetEnd)
+    }
+
+    /**
+     * Test when lineStart/lineEnd falls in a middle of parameter list of a function declaration
+     * The adjusted region should contain the entire function
+     */
+    fun `test suggestion within parameter list of a function declaration Kotlin`() {
+        configureByFile("/testdata/ReflektComponentRegistrar.kt")
+        var efs = EFSuggestion(
+            functionName = "foo",
+            lineStart = 122,
+            lineEnd = 129
+        )
+        val candidates = EFCandidateFactory().buildCandidates(efs, editor, file).toTypedArray()
+        val adjustedCandidates = candidates.filter { it.type == EfCandidateType.ADJUSTED }
+        TestCase.assertEquals(1, adjustedCandidates.size)
+        TestCase.assertEquals(6153, adjustedCandidates[0].offsetStart)
+        TestCase.assertEquals(7099, adjustedCandidates[0].offsetEnd)
+    }
+
+    /**
+     * Test when lineStart/lineEnd falls in a middle of parameter list of a function declaration
+     * The adjusted region should contain the entire function
+     */
+    fun `test suggestion within parameter list of a function declaration Java`() {
+        configureByFile("/testdata/KafkaAdminClientTest.java")
+        val efs = EFSuggestion(
+            functionName = "foo",
+            lineStart = 152,
+            lineEnd = 155
+        )
+        val candidates = EFCandidateFactory().buildCandidates(efs, editor, file).toTypedArray()
+        val adjustedCandidates = candidates.filter { it.type == EfCandidateType.ADJUSTED }
+        TestCase.assertEquals(1, adjustedCandidates.size)
+        TestCase.assertEquals(8465, adjustedCandidates[0].offsetStart)
+        TestCase.assertEquals(8576, adjustedCandidates[0].offsetEnd)
     }
 }

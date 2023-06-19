@@ -9,8 +9,12 @@ import com.intellij.ml.llm.template.models.MyMethodExtractor
 import com.intellij.ml.llm.template.telemetry.EFTelemetryDataManager
 import com.intellij.ml.llm.template.telemetry.EFTelemetryDataUtils
 import com.intellij.ml.llm.template.utils.CodeTransformer
+import com.intellij.ml.llm.template.utils.PsiUtils
 import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.editor.LogicalPosition
+import com.intellij.openapi.editor.ScrollType
 import com.intellij.openapi.keymap.KeymapUtil
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.JBPopup
@@ -18,7 +22,6 @@ import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiMethod
-import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.refactoring.extractMethod.newImpl.MethodExtractor
 import com.intellij.refactoring.ui.MethodSignatureComponent
 import com.intellij.ui.components.JBScrollPane
@@ -31,12 +34,8 @@ import org.jetbrains.annotations.Nls
 import org.jetbrains.kotlin.idea.KotlinLanguage
 import org.jetbrains.kotlin.idea.base.psi.unifier.toRange
 import org.jetbrains.kotlin.idea.refactoring.introduce.extractionEngine.*
-import org.jetbrains.kotlin.psi.KtBlockExpression
 import org.jetbrains.kotlin.psi.KtFile
-import org.jetbrains.kotlin.psi.KtNamedFunction
 import org.jetbrains.kotlin.psi.psiUtil.elementsInRange
-import org.jetbrains.kotlin.utils.addToStdlib.UnsafeCastFunction
-import org.jetbrains.kotlin.utils.addToStdlib.safeAs
 import java.awt.Dimension
 import java.awt.event.KeyEvent
 import java.awt.event.MouseEvent
@@ -67,6 +66,7 @@ class ExtractFunctionPanel(
     private val myFile = file
     private val myHighlighter = highlighter
     private val myEFTelemetryDataManager = efTelemetryDataManager
+    private val logger = Logger.getInstance("#com.intellij.ml.llm")
 
     init {
         val tableModel = buildTableModel(myCandidates)
@@ -129,6 +129,7 @@ class ExtractFunctionPanel(
             scopeHighlighter.dropHighlight()
             val range = TextRange(candidate.offsetStart, candidate.offsetEnd)
             scopeHighlighter.highlight(com.intellij.openapi.util.Pair(range, listOf(range)))
+            myEditor.scrollingModel.scrollTo(LogicalPosition(candidate.lineStart, 0), ScrollType.CENTER)
         }
         extractFunctionCandidateTable.selectionModel.setSelectionInterval(0, 0)
         extractFunctionCandidateTable.cellEditor = null
@@ -196,7 +197,6 @@ class ExtractFunctionPanel(
 
             row {
                 button(LLMBundle.message("ef.candidates.popup.extract.function.button.title"), actionListener = {
-                    myPopup?.closeOk(null)
                     doExtractMethod(myExtractFunctionsCandidateTable.selectedRow)
                 }).comment(
                     LLMBundle.message(
@@ -239,8 +239,6 @@ class ExtractFunctionPanel(
         return builder.toString()
     }
 
-
-    @OptIn(UnsafeCastFunction::class)
     private fun generateFunctionSignature(efCandidate: EFCandidate): String {
         var signature = LLMBundle.message("ef.candidates.popup.cannot.compute.function.signature")
         when (myFile.language) {
@@ -262,55 +260,48 @@ class ExtractFunctionPanel(
                     elements: List<PsiElement>,
                     targetSibling: PsiElement
                 ): @Nls String {
-                    var signature = LLMBundle.message("ef.candidates.popup.cannot.compute.function.signature")
-                    val adjustedElements = elements.singleOrNull().safeAs<KtBlockExpression>()?.statements ?: elements
-                    val extractionData = ExtractionData(file, adjustedElements.toRange(false), targetSibling)
-                    val analysisResult = extractionData.performAnalysis()
-                    if (analysisResult.status == AnalysisResult.Status.SUCCESS) {
-                        val config = ExtractionGeneratorConfiguration(
-                            analysisResult.descriptor!!,
-                            ExtractionGeneratorOptions(
-                                inTempFile = true,
-                                target = ExtractionTarget.FUNCTION,
-                                dummyName = functionName,
+                    var kotlinSignature = LLMBundle.message("ef.candidates.popup.cannot.compute.function.signature")
+                    val extractionData = ExtractionData(file, elements.toRange(false), targetSibling)
+                    try {
+                        val analysisResult = extractionData.performAnalysis()
+                        if (analysisResult.status == AnalysisResult.Status.SUCCESS) {
+                            val config = ExtractionGeneratorConfiguration(
+                                analysisResult.descriptor!!,
+                                ExtractionGeneratorOptions(
+                                    inTempFile = true,
+                                    target = ExtractionTarget.FUNCTION,
+                                    dummyName = functionName,
+                                )
                             )
-                        )
-                        signature = config.getDeclarationPattern()
-                        signature = signature.replace("$0", "\t...")
-                        signature = signature.replace(", ", ",\n\t")
-                    }
-
-                    return signature
-                }
-
-                fun getAllElementsInRange(psiFile: PsiFile, startOffset: Int, endOffset: Int): List<PsiElement> {
-                    val elements = mutableListOf<PsiElement>()
-
-                    val startElement = psiFile.findElementAt(startOffset)
-                    val endElement = psiFile.findElementAt(endOffset)
-
-                    if (startElement != null && endElement != null) {
-                        psiFile.elementsInRange(TextRange(startOffset, endOffset)).forEach {
-                            elements.add(it)
+                            kotlinSignature = config.getDeclarationPattern().replace(Regex("[\\w.]+${efCandidate.functionName}"), efCandidate.functionName)
+                            val paramList = analysisResult.descriptor!!.parameters.map {
+                                "${it.name}: ${it.parameterType}"
+                            }
+                            val returnType = analysisResult.descriptor!!.returnType.toString()
+                            kotlinSignature =
+                                    kotlinSignature.substringBefore(efCandidate.functionName) + "${efCandidate.functionName} (${
+                                paramList.joinToString(separator = ",\n\t")
+                            }) : $returnType {\n\t...\n}"
                         }
+                    } catch (e: Exception) {
+                        logger.error("Error computing signature for candidate:\n$efCandidate\n")
+                        logger.error(e)
                     }
 
-                    return elements
+                    return kotlinSignature
                 }
 
-                fun getParentKtFunction(element: PsiElement): KtNamedFunction? {
-                    return PsiTreeUtil.getParentOfType(element, KtNamedFunction::class.java)
-                }
-
-                val elements = getAllElementsInRange(myFile, efCandidate.offsetStart, efCandidate.offsetEnd)
-                val targetSibling = getParentKtFunction(elements[0])
-                if (targetSibling != null) {
-                    signature = computeKotlinFunctionSignature(
-                        efCandidate.functionName,
-                        myFile as KtFile,
-                        elements,
-                        targetSibling
-                    )
+                val elements = myFile.elementsInRange(TextRange(efCandidate.offsetStart, efCandidate.offsetEnd))
+                if (elements.isNotEmpty()) {
+                    val targetSibling = PsiUtils.getParentFunctionOrNull(elements[0], myFile.language)
+                    if (targetSibling != null) {
+                        signature = computeKotlinFunctionSignature(
+                            efCandidate.functionName,
+                            myFile as KtFile,
+                            elements,
+                            targetSibling
+                        )
+                    }
                 }
             }
         }
@@ -334,7 +325,8 @@ class ExtractFunctionPanel(
             EFTelemetryDataUtils.buildUserSelectionTelemetryData(
                 efCandidate,
                 index,
-                hostFunctionTelemetryData
+                hostFunctionTelemetryData,
+                myFile
             )
         )
     }

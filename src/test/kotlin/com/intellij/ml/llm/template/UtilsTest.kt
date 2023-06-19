@@ -5,8 +5,12 @@ import com.intellij.ml.llm.template.models.ExtractFunctionLLMRequestProvider
 import com.intellij.ml.llm.template.models.LLMRequestProvider
 import com.intellij.ml.llm.template.models.sendChatRequest
 import com.intellij.ml.llm.template.utils.*
+import com.intellij.psi.PsiMethod
+import com.intellij.psi.util.PsiUtilBase
 import com.intellij.testFramework.LightPlatformCodeInsightTestCase
 import junit.framework.TestCase
+import org.jetbrains.kotlin.idea.core.moveCaret
+import org.jetbrains.kotlin.psi.KtNamedFunction
 
 class UtilsTest : LightPlatformCodeInsightTestCase() {
     private var projectPath = "src/test"
@@ -127,5 +131,149 @@ class UtilsTest : LightPlatformCodeInsightTestCase() {
         val secondNotifPayload = notifications[1].payload as EFCandidateApplicationPayload
         TestCase.assertEquals(EFApplicationResult.OK, firstNotifPayload.result)
         TestCase.assertEquals(EFApplicationResult.FAIL, secondNotifPayload.result)
+    }
+
+    fun `test parent function correctly determined for caret position in Java code`() {
+        configureByFile("/testdata/KafkaAdminClientTest.java")
+        editor.moveCaret(638)
+        val expectedFunctionName = "testDeleteRecords"
+        val funPsi = PsiUtils.getParentFunctionOrNull(editor, file.language)
+
+        TestCase.assertNotNull(funPsi)
+        TestCase.assertTrue(funPsi is PsiMethod)
+        TestCase.assertEquals(expectedFunctionName, (funPsi as PsiMethod).name)
+    }
+
+    fun `test parent function correctly determined for caret position in Kotlin code`() {
+        configureByFile("/testdata/RodCuttingProblem.kt")
+        editor.moveCaret(469)
+        val expectedFunctionName = "rodCutting"
+        val funPsi = PsiUtils.getParentFunctionOrNull(editor, file.language)
+
+        TestCase.assertNotNull(funPsi)
+        TestCase.assertTrue(funPsi is KtNamedFunction)
+        TestCase.assertEquals(expectedFunctionName, (funPsi as KtNamedFunction).name)
+    }
+
+    fun `test function block start line in Java code`() {
+        configureByFile("/testdata/KafkaAdminClientTest.java")
+        editor.moveCaret(638)
+        val expectedLine = 5
+        val actualLine = PsiUtils.getFunctionBodyStartLine(PsiUtils.getParentFunctionOrNull(editor, file.language))
+
+        TestCase.assertEquals(expectedLine, actualLine)
+    }
+
+    fun `test function block start line in Kotlin code`() {
+        configureByFile("/testdata/RodCuttingProblem.kt")
+        editor.moveCaret(469)
+        val expectedLine = 8
+        val actualLine = PsiUtils.getFunctionBodyStartLine(PsiUtils.getParentFunctionOrNull(editor, file.language))
+
+        TestCase.assertEquals(expectedLine, actualLine)
+    }
+
+    fun `test psi elements belong to the same function Kotlin`() {
+        configureByFile("/testdata/RodCuttingProblem.kt")
+        editor.moveCaret(1181)
+        val elem1 = PsiUtilBase.getElementAtCaret(editor)
+        editor.moveCaret(1332)
+        val elem2 = PsiUtilBase.getElementAtCaret(editor)
+
+        TestCase.assertTrue(PsiUtils.elementsBelongToSameFunction(elem1!!, elem2!!, file.language))
+    }
+
+    fun `test psi elements belong to the same function Java`() {
+        configureByFile("/testdata/KafkaAdminClientTest.java")
+        editor.moveCaret(5473)
+        val elem1 = PsiUtilBase.getElementAtCaret(editor)
+        editor.moveCaret(6489)
+        val elem2 = PsiUtilBase.getElementAtCaret(editor)
+
+        TestCase.assertTrue(PsiUtils.elementsBelongToSameFunction(elem1!!, elem2!!, file.language))
+    }
+
+    fun `test psi elements do not belong to the same function Kotlin`() {
+        configureByFile("/testdata/RodCuttingProblem.kt")
+        editor.moveCaret(776)
+        val elem1 = PsiUtilBase.getElementAtCaret(editor)
+        editor.moveCaret(1332)
+        val elem2 = PsiUtilBase.getElementAtCaret(editor)
+
+        TestCase.assertFalse(PsiUtils.elementsBelongToSameFunction(elem1!!, elem2!!, file.language))
+    }
+
+    fun `test psi elements do not belong to the same function Java`() {
+        configureByFile("/testdata/KafkaAdminClientTest.java")
+        editor.moveCaret(5402)
+        val elem1 = PsiUtilBase.getElementAtCaret(editor)
+        editor.moveCaret(8130)
+        val elem2 = PsiUtilBase.getElementAtCaret(editor)
+
+        TestCase.assertFalse(PsiUtils.elementsBelongToSameFunction(elem1!!, elem2!!, file.language))
+    }
+
+    fun `test psi element is an argument or argument list Kotlin`() {
+        configureByFile("/testdata/ReflektComponentRegistrar.kt")
+        editor.moveCaret(8315)
+        val psiElement = PsiUtilBase.getElementAtCaret(editor)
+
+        TestCase.assertTrue(PsiUtils.isElementArgumentOrArgumentList(psiElement!!, file.language))
+    }
+
+    fun `test psi element is an argument or argument list Java`() {
+        configureByFile("/testdata/KafkaAdminClientTest.java")
+        editor.moveCaret(3960)
+        val psiElement = PsiUtilBase.getElementAtCaret(editor)
+
+        TestCase.assertTrue(PsiUtils.isElementArgumentOrArgumentList(psiElement!!, file.language))
+    }
+
+    fun `test psi element is not an argument or argument list Kotlin`() {
+        configureByFile("/testdata/ReflektComponentRegistrar.kt")
+        editor.moveCaret(8093)
+        val psiElement = PsiUtilBase.getElementAtCaret(editor)
+
+        TestCase.assertFalse(PsiUtils.isElementArgumentOrArgumentList(psiElement!!, file.language))
+    }
+
+    fun `test psi element is not an argument or argument list Java`() {
+        configureByFile("/testdata/KafkaAdminClientTest.java")
+        editor.moveCaret(3861)
+        val psiElement = PsiUtilBase.getElementAtCaret(editor)
+
+        TestCase.assertFalse(PsiUtils.isElementArgumentOrArgumentList(psiElement!!, file.language))
+    }
+
+    fun `test psi element is a parameter or parameter list Kotlin`() {
+        configureByFile("/testdata/ReflektComponentRegistrar.kt")
+        editor.moveCaret(7793)
+        val psiElement = PsiUtilBase.getElementAtCaret(editor)
+
+        TestCase.assertTrue(PsiUtils.isElementParameterOrParameterList(psiElement, file.language))
+    }
+
+    fun `test psi element is a parameter or parameter list Java`() {
+        configureByFile("/testdata/KafkaAdminClientTest.java")
+        editor.moveCaret(8498)
+        val psiElement = PsiUtilBase.getElementAtCaret(editor)
+
+        TestCase.assertTrue(PsiUtils.isElementParameterOrParameterList(psiElement, file.language))
+    }
+
+    fun `test psi element is not a parameter or parameter list Kotlin`() {
+        configureByFile("/testdata/ReflektComponentRegistrar.kt")
+        editor.moveCaret(7921)
+        val psiElement = PsiUtilBase.getElementAtCaret(editor)
+
+        TestCase.assertFalse(PsiUtils.isElementParameterOrParameterList(psiElement, file.language))
+    }
+
+    fun `test psi element is not a parameter or parameter list Java`() {
+        configureByFile("/testdata/KafkaAdminClientTest.java")
+        editor.moveCaret(8556)
+        val psiElement = PsiUtilBase.getElementAtCaret(editor)
+
+        TestCase.assertFalse(PsiUtils.isElementParameterOrParameterList(psiElement, file.language))
     }
 }

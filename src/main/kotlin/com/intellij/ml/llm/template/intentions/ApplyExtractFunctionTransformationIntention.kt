@@ -28,15 +28,8 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.ui.popup.JBPopupListener
 import com.intellij.openapi.ui.popup.LightweightWindowEvent
-import com.intellij.psi.PsiCodeBlock
-import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
-import com.intellij.psi.PsiNameIdentifierOwner
-import com.intellij.psi.util.PsiTreeUtil
-import com.intellij.psi.util.PsiUtilBase
 import com.intellij.ui.awt.RelativePoint
-import org.jetbrains.kotlin.idea.base.psi.getLineNumber
-import org.jetbrains.kotlin.psi.KtBlockExpression
 import java.awt.Point
 import java.awt.Rectangle
 import java.util.concurrent.atomic.AtomicReference
@@ -63,47 +56,26 @@ abstract class ApplyExtractFunctionTransformationIntention(
 
     override fun invoke(project: Project, editor: Editor?, file: PsiFile?) {
         if (editor == null || file == null) return
-
         val selectionModel = editor.selectionModel
-        val selectedText = selectionModel.selectedText
-        if (selectedText != null) {/*
-             * The selected text should be the whole function. We have to follow the following steps:
-             * 1. Take the selected text, and send it to ChatGPT using a well formatted prompt
-             * 2. Process the reply
-             *      - how to handle multiple suggestions? Take the largest?
-             *      - options should be filtered based on some criteria such as how actionable they are,
-             *        how many lines of code do they cover, etc.
-             * 3. Present suggestions to developer and let the developer choose
-             * 4. Based on the developer's choice, automatic Extract Function should be performed
-             */
+        val namedElement = PsiUtils.getParentFunctionOrNull(editor, file.language)
+        if (namedElement != null) {
+            telemetryDataManager.newSession()
+            val codeSnippet = namedElement.text
 
-            invokeLlm(selectedText, project, editor, file)
+            val textRange = namedElement.textRange
+            selectionModel.setSelection(textRange.startOffset, textRange.endOffset)
+            val startLineNumber = editor.document.getLineNumber(selectionModel.selectionStart) + 1
+            val withLineNumbers = addLineNumbersToCodeSnippet(codeSnippet, startLineNumber)
 
-        } else {
-            val namedElement = getParentNamedElement(editor)
-            if (namedElement != null) {
-                val block = getChildBlockElement(namedElement)
-                var blockLineStart = -1
-                if (block != null) {
-                    blockLineStart = block.firstChild.getLineNumber(false) + 1
-                }
-
-                telemetryDataManager.newSession()
-                val codeSnippet = namedElement.text
-
-                val textRange = namedElement.textRange
-                selectionModel.setSelection(textRange.startOffset, textRange.endOffset)
-                val startLineNumber = editor.document.getLineNumber(selectionModel.selectionStart) + 1
-                val withLineNumbers = addLineNumbersToCodeSnippet(codeSnippet, startLineNumber)
-
-                telemetryDataManager.addHostFunctionTelemetryData(
-                    EFTelemetryDataUtils.buildHostFunctionTelemetryData(
-                        codeSnippet = codeSnippet, lineStart = startLineNumber, bodyLineStart = blockLineStart
-                    )
+            telemetryDataManager.addHostFunctionTelemetryData(
+                EFTelemetryDataUtils.buildHostFunctionTelemetryData(
+                    codeSnippet = codeSnippet,
+                    lineStart = startLineNumber,
+                    bodyLineStart = PsiUtils.getFunctionBodyStartLine(namedElement)
                 )
+            )
 
-                invokeLlm(withLineNumbers, project, editor, file)
-            }
+            invokeLlm(withLineNumbers, project, editor, file)
         }
     }
 
@@ -128,7 +100,6 @@ abstract class ApplyExtractFunctionTransformationIntention(
                             )
                         } else {
                             processSuggestions(response, editor, file, project)
-
                         }
                     }
                 }
@@ -228,16 +199,6 @@ abstract class ApplyExtractFunctionTransformationIntention(
         val visibleRect: Rectangle = contentComponent.visibleRect
         val point = Point(visibleRect.x + visibleRect.width - 500, visibleRect.y)
         efPopup.show(RelativePoint(contentComponent, point))
-    }
-
-    private fun getParentNamedElement(editor: Editor): PsiNameIdentifierOwner? {
-        val element = PsiUtilBase.getElementAtCaret(editor)
-        return PsiTreeUtil.getParentOfType(element, PsiNameIdentifierOwner::class.java)
-    }
-
-    private fun getChildBlockElement(psiElement: PsiElement): PsiElement? {
-        return PsiTreeUtil.getChildOfType(psiElement, PsiCodeBlock::class.java)
-            ?: return PsiTreeUtil.getChildOfType(psiElement, KtBlockExpression::class.java)
     }
 
     abstract fun getInstruction(project: Project, editor: Editor): String?

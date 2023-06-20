@@ -99,7 +99,7 @@ abstract class ApplyExtractFunctionTransformationIntention(
                                 NotificationType.INFORMATION
                             )
                         } else {
-                            processSuggestions(response, editor, file, project)
+                            processLLMResponse(response, project, editor, file)
                         }
                     }
                 }
@@ -108,50 +108,51 @@ abstract class ApplyExtractFunctionTransformationIntention(
         ProgressManager.getInstance().runProcessWithProgressAsynchronously(task, BackgroundableProcessIndicator(task))
     }
 
-    private fun processSuggestions(
-        response: LLMBaseResponse, editor: Editor, file: PsiFile, project: Project
-    ) {
-        val efCandidateFactory = EFCandidateFactory()
-        for (suggestion in response.getSuggestions()) {
-            val candidatesApplicationTelemetryObserver = EFCandidatesApplicationTelemetryObserver()
-            val efSuggestionList = identifyExtractFunctionSuggestions(suggestion.text)
-            val efCandidates = ArrayList<EFCandidate>()
-            efSuggestionList.suggestionList.forEach { efs ->
-                efCandidates.addAll(efCandidateFactory.buildCandidates(efs, editor, file))
-            }
+    private fun filterCandidates(candidates: List<EFCandidate>, editor: Editor, file: PsiFile): List<EFCandidate> {
+        val candidatesApplicationTelemetryObserver = EFCandidatesApplicationTelemetryObserver()
+        val filteredCandidates = candidates.filter {
+            isCandidateExtractable(
+                it, editor, file, listOf(EFLoggerObserver(logger), candidatesApplicationTelemetryObserver)
+            )
+        }.sortedByDescending { it.lineEnd - it.lineStart }
 
-            if (efCandidates.isEmpty()) {
+
+        return filteredCandidates
+    }
+
+    private fun processLLMResponse(response: LLMBaseResponse, project: Project, editor: Editor, file: PsiFile) {
+        val llmResponse = response.getSuggestions()[0]
+        val efSuggestionList = identifyExtractFunctionSuggestions(llmResponse.text)
+        val candidates = EFCandidateFactory().buildCandidates(efSuggestionList.suggestionList, editor, file).toList()
+        if (candidates.isEmpty()) {
+            showEFNotification(
+                project,
+                LLMBundle.message("notification.extract.function.with.llm.no.suggestions.message"),
+                NotificationType.INFORMATION
+            )
+            telemetryDataManager.addCandidatesTelemetryData(buildCandidatesTelemetryData(0, emptyList()))
+            sendTelemetryData()
+        } else {
+            val candidatesApplicationTelemetryObserver = EFCandidatesApplicationTelemetryObserver()
+            val filteredCandidates = filterCandidates(candidates, editor, file)
+
+            telemetryDataManager.addCandidatesTelemetryData(
+                buildCandidatesTelemetryData(
+                    efSuggestionList.suggestionList.size,
+                    candidatesApplicationTelemetryObserver.getData()
+                )
+            )
+
+            if (filteredCandidates.isEmpty()) {
                 showEFNotification(
                     project,
-                    LLMBundle.message("notification.extract.function.with.llm.no.suggestions.message"),
+                    LLMBundle.message("notification.extract.function.with.llm.no.extractable.candidates.message"),
                     NotificationType.INFORMATION
                 )
-                telemetryDataManager.addCandidatesTelemetryData(buildCandidatesTelemetryData(0, emptyList()))
                 sendTelemetryData()
             } else {
-                val filteredCandidates = efCandidates.filter {
-                    isCandidateExtractable(
-                        it, editor, file, listOf(EFLoggerObserver(logger), candidatesApplicationTelemetryObserver)
-                    )
-                }
-
-                telemetryDataManager.addCandidatesTelemetryData(
-                    buildCandidatesTelemetryData(
-                        efSuggestionList.suggestionList.size, candidatesApplicationTelemetryObserver.getData()
-                    )
-                )
-                if (filteredCandidates.isEmpty()) {
-                    showEFNotification(
-                        project,
-                        LLMBundle.message("notification.extract.function.with.llm.no.extractable.candidates.message"),
-                        NotificationType.INFORMATION
-                    )
-                    sendTelemetryData()
-                } else {
-                    showExtractFunctionPopup(project, editor, file, filteredCandidates, codeTransformer)
-                }
+                showExtractFunctionPopup(project, editor, file, filteredCandidates, codeTransformer)
             }
-
         }
     }
 

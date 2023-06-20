@@ -283,9 +283,9 @@ class ExtractFunctionPanel(
                                 paramList.joinToString(separator = ",\n\t")
                             }) : $returnType {\n\t...\n}"
                         }
-                    } catch (e: Exception) {
+                    } catch (t: Throwable) {
                         logger.error("Error computing signature for candidate:\n$efCandidate\n")
-                        logger.error(e)
+                        logger.error(t)
                     }
 
                     return kotlinSignature

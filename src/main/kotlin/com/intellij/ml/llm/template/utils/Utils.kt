@@ -8,6 +8,7 @@ import com.intellij.ml.llm.template.extractfunction.EFSuggestion
 import com.intellij.ml.llm.template.extractfunction.EFSuggestionList
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.util.TextRange
 import com.intellij.psi.*
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.psi.util.PsiUtilBase
@@ -18,8 +19,11 @@ import com.intellij.refactoring.suggested.endOffset
 import com.intellij.refactoring.suggested.startOffset
 import org.jetbrains.kotlin.idea.KotlinLanguage
 import org.jetbrains.kotlin.idea.base.psi.getLineNumber
+import org.jetbrains.kotlin.idea.base.psi.unifier.toRange
 import org.jetbrains.kotlin.idea.refactoring.introduce.extractFunction.ExtractKotlinFunctionHandler
+import org.jetbrains.kotlin.idea.refactoring.introduce.extractionEngine.*
 import org.jetbrains.kotlin.psi.*
+import org.jetbrains.kotlin.psi.psiUtil.elementsInRange
 
 
 fun addLineNumbersToCodeSnippet(codeSnippet: String, startIndex: Int): String {
@@ -172,10 +176,30 @@ private fun isSelectionExtractableKotlin(
             efKotlinHandler.selectElements(editor, file) { elements, _ ->
                 result = elements.isNotEmpty()
             }
-        } catch (e: Exception) {
-            logException(e)
+            val elements = file.elementsInRange(TextRange(efCandidate.offsetStart, efCandidate.offsetEnd))
+            val targetSibling = PsiUtils.getParentFunctionOrNull(elements[0], file.language)
+            val extractionData = ExtractionData(file, elements.toRange(false), targetSibling!!)
+            val analysisResult = extractionData.performAnalysis()
+            if (analysisResult.status != AnalysisResult.Status.SUCCESS) {
+                result = false
+                reason = LLMBundle.message("extract.function.code.not.extractable.message")
+                applicationResult = EFApplicationResult.FAIL
+            }
+            else {
+                ExtractionGeneratorConfiguration(
+                    analysisResult.descriptor!!,
+                    ExtractionGeneratorOptions(
+                        inTempFile = true,
+                        target = ExtractionTarget.FUNCTION,
+                        dummyName = efCandidate.functionName,
+                    )
+                ).generateDeclaration()
+            }
+
+        }
+        catch (t: Throwable) {
             result = false
-            reason = e.message ?: reason
+            reason = LLMBundle.message("extract.function.code.not.extractable.message")
             applicationResult = EFApplicationResult.FAIL
         }
     }

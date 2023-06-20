@@ -108,8 +108,7 @@ abstract class ApplyExtractFunctionTransformationIntention(
         ProgressManager.getInstance().runProcessWithProgressAsynchronously(task, BackgroundableProcessIndicator(task))
     }
 
-    private fun filterCandidates(candidates: List<EFCandidate>, editor: Editor, file: PsiFile): List<EFCandidate> {
-        val candidatesApplicationTelemetryObserver = EFCandidatesApplicationTelemetryObserver()
+    private fun filterCandidates(candidates: List<EFCandidate>, candidatesApplicationTelemetryObserver:EFCandidatesApplicationTelemetryObserver, editor: Editor, file: PsiFile): List<EFCandidate> {
         val filteredCandidates = candidates.filter {
             isCandidateExtractable(
                 it, editor, file, listOf(EFLoggerObserver(logger), candidatesApplicationTelemetryObserver)
@@ -134,7 +133,7 @@ abstract class ApplyExtractFunctionTransformationIntention(
             sendTelemetryData()
         } else {
             val candidatesApplicationTelemetryObserver = EFCandidatesApplicationTelemetryObserver()
-            val filteredCandidates = filterCandidates(candidates, editor, file)
+            val filteredCandidates = filterCandidates(candidates, candidatesApplicationTelemetryObserver, editor, file)
 
             telemetryDataManager.addCandidatesTelemetryData(
                 buildCandidatesTelemetryData(

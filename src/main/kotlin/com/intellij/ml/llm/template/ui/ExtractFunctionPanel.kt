@@ -274,14 +274,12 @@ class ExtractFunctionPanel(
                                 )
                             )
                             kotlinSignature = config.getDeclarationPattern().replace(Regex("[\\w.]+${efCandidate.functionName}"), efCandidate.functionName)
-                            val paramList = analysisResult.descriptor!!.parameters.map {
-                                "${it.name}: ${it.parameterType}"
+                            val regex = Regex("\\b(\\w+)(?:\\.\\w+)+\\b")
+                            kotlinSignature = kotlinSignature.replace(regex) { matchResult ->
+                                matchResult.value.substringAfterLast('.')
                             }
-                            val returnType = analysisResult.descriptor!!.returnType.toString()
-                            kotlinSignature =
-                                    kotlinSignature.substringBefore(efCandidate.functionName) + "${efCandidate.functionName} (${
-                                paramList.joinToString(separator = ",\n\t")
-                            }) : $returnType {\n\t...\n}"
+                            kotlinSignature = kotlinSignature.replace(",", ",\n\t")
+                            kotlinSignature = kotlinSignature.replace("$0", "\t...")
                         }
                     } catch (t: Throwable) {
                         logger.error("Error computing signature for candidate:\n$efCandidate\n")

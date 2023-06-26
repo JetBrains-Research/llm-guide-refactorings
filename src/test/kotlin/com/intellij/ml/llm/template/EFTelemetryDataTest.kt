@@ -84,7 +84,7 @@ class EFTelemetryDataTest : LightPlatformCodeInsightTestCase() {
             positionInHostFunction = 10,
             selectedCandidateIndex = 0,
             candidateType = EfCandidateType.ADJUSTED,
-            elementsType = emptyList()
+            elementsType = emptyList(),
         )
 
         manager

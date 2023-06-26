@@ -113,7 +113,7 @@ class UtilsTest : LightPlatformCodeInsightTestCase() {
         TestCase.assertEquals(expectedUrl, actualUrl)
     }
 
-    fun `test isCandidateExtractable generates correct notifications`() {
+    fun `test isCandidateExtractable generates correct notifications Java`() {
         configureByFile("/testdata/KafkaAdminClientTest.java")
         val efSuggestion = EFSuggestion(
             functionName = "foo",

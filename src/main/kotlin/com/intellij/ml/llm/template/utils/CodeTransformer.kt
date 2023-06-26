@@ -14,11 +14,9 @@ import com.intellij.psi.PsiFile
 import com.intellij.psi.util.PsiTreeUtil
 import org.jetbrains.kotlin.idea.KotlinLanguage
 import org.jetbrains.kotlin.idea.refactoring.introduce.extractFunction.ExtractKotlinFunctionHandler
-import org.jetbrains.kotlin.utils.addIfNotNull
 
-class CodeTransformer : Observable {
+class CodeTransformer : Observable() {
     private val logger = Logger.getInstance("#com.intellij.ml.llm")
-    private val observers = mutableListOf<Any>()
 
     fun applyCandidate(efCandidate: EFCandidate, project: Project, editor: Editor, file: PsiFile): Boolean {
         var applicationResult = EFApplicationResult.OK
@@ -99,20 +97,5 @@ class CodeTransformer : Observable {
 
     private fun isCandidateValid(efCandidate: EFCandidate): Boolean {
         return efCandidate.offsetStart >= 0 && efCandidate.offsetEnd >= 0
-    }
-
-    override fun addObserver(observer: Observer) {
-        if (observers.contains(observer)) return
-        observers.addIfNotNull(observer)
-    }
-
-    override fun removeObserver(observer: Observer) {
-        observers.remove(observer)
-    }
-
-    override fun notifyObservers(notification: EFNotification) {
-        observers.forEach {
-            (it as Observer).update(notification)
-        }
     }
 }

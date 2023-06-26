@@ -1,7 +1,7 @@
 [![JetBrains Research](https://jb.gg/badges/research.svg)](https://confluence.jetbrains.com/display/ALL/JetBrains+on+GitHub)
 [![Gradle Build](https://github.com/JetBrains-Research/llm-guide-refactorings/actions/workflows/gradle-build.yml/badge.svg)](https://github.com/JetBrains-Research/llm-guide-refactorings/actions/workflows/gradle-build.yml)
 
-# LLMs guide IDE refactorings
+# LLMs guide IDE refactorings - Extract Function
 
 <!-- Plugin description -->
 Researching collaboration between LLMs and IDEs to perform automated Extract Function refactoring. It combines the 
@@ -22,8 +22,6 @@ the reliability of IntelliJ IDE to carry out correctly the code transformations.
 - Get your OpenAI API key
 - Go to Settings | Tools | Large Language Models and enter your API key in the "OpenAI Key" field. If you are a member
   of only one organization, leave the "OpenAI Organization" field empty
-- Select a code fragment, press Alt-Enter and select "apply custom edit" intention
-- Write an instruction for the LLM and wait for the result
 
 ## ChatGPT communication configuration
 
@@ -165,3 +163,8 @@ Collected telemetry data does not contain:
 
 Moreover, the telemetry data file or data is not automatically sent anywhere. It exists only on the user's machine,
 it's in JSON human-readable format, and the choice of sharing this file with the authors belongs solely to the user.
+
+### Where to find the telemetry data file?
+The file containing the telemetry data described above can be found in the folder where your IntelliJ Idea IDE saves
+the log files, then look for this path **ef_plugin_logs/ef_telemetry_data.log**. For example, for me, on a Mac it's in 
+`~/Library/Logs/JetBrains/IntelliJIdea2023.1/ef_plugin_logs/ef_telemetry_data.log`. 

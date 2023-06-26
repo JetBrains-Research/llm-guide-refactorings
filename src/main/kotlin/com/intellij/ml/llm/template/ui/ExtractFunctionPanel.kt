@@ -6,9 +6,13 @@ import com.intellij.ml.llm.template.LLMBundle
 import com.intellij.ml.llm.template.extractfunction.EFCandidate
 import com.intellij.ml.llm.template.models.FunctionNameProvider
 import com.intellij.ml.llm.template.models.MyMethodExtractor
+import com.intellij.ml.llm.template.telemetry.EFTelemetryDataElapsedTimeNotificationPayload
 import com.intellij.ml.llm.template.telemetry.EFTelemetryDataManager
 import com.intellij.ml.llm.template.telemetry.EFTelemetryDataUtils
+import com.intellij.ml.llm.template.telemetry.TelemetryDataAction
 import com.intellij.ml.llm.template.utils.CodeTransformer
+import com.intellij.ml.llm.template.utils.EFNotification
+import com.intellij.ml.llm.template.utils.Observable
 import com.intellij.ml.llm.template.utils.PsiUtils
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.diagnostic.Logger
@@ -54,7 +58,7 @@ class ExtractFunctionPanel(
     codeTransformer: CodeTransformer,
     highlighter: AtomicReference<ScopeHighlighter>,
     efTelemetryDataManager: EFTelemetryDataManager? = null
-) {
+) : Observable() {
     val myExtractFunctionsCandidateTable: JBTable
     private val myExtractFunctionsScrollPane: JBScrollPane
     private val myProject: Project = project
@@ -67,6 +71,7 @@ class ExtractFunctionPanel(
     private val myHighlighter = highlighter
     private val myEFTelemetryDataManager = efTelemetryDataManager
     private val logger = Logger.getInstance("#com.intellij.ml.llm")
+    private var prevSelectedCandidateIndex = 0
 
     init {
         val tableModel = buildTableModel(myCandidates)
@@ -130,6 +135,11 @@ class ExtractFunctionPanel(
             val range = TextRange(candidate.offsetStart, candidate.offsetEnd)
             scopeHighlighter.highlight(com.intellij.openapi.util.Pair(range, listOf(range)))
             myEditor.scrollingModel.scrollTo(LogicalPosition(candidate.lineStart, 0), ScrollType.CENTER)
+
+            // compute elapsed time
+            notifyObservers(EFNotification(EFTelemetryDataElapsedTimeNotificationPayload(TelemetryDataAction.STOP, prevSelectedCandidateIndex)))
+            notifyObservers(EFNotification(EFTelemetryDataElapsedTimeNotificationPayload(TelemetryDataAction.START, extractFunctionCandidateTable.selectedRow)))
+            prevSelectedCandidateIndex = extractFunctionCandidateTable.selectedRow
         }
         extractFunctionCandidateTable.selectionModel.setSelectionInterval(0, 0)
         extractFunctionCandidateTable.cellEditor = null
@@ -307,6 +317,7 @@ class ExtractFunctionPanel(
     }
 
     private fun doExtractMethod(index: Int) {
+        notifyObservers(EFNotification(EFTelemetryDataElapsedTimeNotificationPayload(TelemetryDataAction.STOP, prevSelectedCandidateIndex)))
         addSelectionToTelemetryData(index)
         val efCandidate = myCandidates[index]
         myPopup!!.cancel()

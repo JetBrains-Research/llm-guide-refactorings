@@ -10,10 +10,7 @@ import com.intellij.ml.llm.template.models.LLMRequestProvider
 import com.intellij.ml.llm.template.models.sendChatRequest
 import com.intellij.ml.llm.template.prompts.fewShotExtractSuggestion
 import com.intellij.ml.llm.template.showEFNotification
-import com.intellij.ml.llm.template.telemetry.EFCandidatesTelemetryData
-import com.intellij.ml.llm.template.telemetry.EFTelemetryDataManager
-import com.intellij.ml.llm.template.telemetry.EFTelemetryDataUtils
-import com.intellij.ml.llm.template.telemetry.TelemetryDataObserver
+import com.intellij.ml.llm.template.telemetry.*
 import com.intellij.ml.llm.template.ui.ExtractFunctionPanel
 import com.intellij.ml.llm.template.utils.*
 import com.intellij.notification.NotificationType
@@ -108,7 +105,12 @@ abstract class ApplyExtractFunctionTransformationIntention(
         ProgressManager.getInstance().runProcessWithProgressAsynchronously(task, BackgroundableProcessIndicator(task))
     }
 
-    private fun filterCandidates(candidates: List<EFCandidate>, candidatesApplicationTelemetryObserver:EFCandidatesApplicationTelemetryObserver, editor: Editor, file: PsiFile): List<EFCandidate> {
+    private fun filterCandidates(
+        candidates: List<EFCandidate>,
+        candidatesApplicationTelemetryObserver: EFCandidatesApplicationTelemetryObserver,
+        editor: Editor,
+        file: PsiFile
+    ): List<EFCandidate> {
         val filteredCandidates = candidates.filter {
             isCandidateExtractable(
                 it, editor, file, listOf(EFLoggerObserver(logger), candidatesApplicationTelemetryObserver)
@@ -172,6 +174,8 @@ abstract class ApplyExtractFunctionTransformationIntention(
             highlighter = highlighter,
             efTelemetryDataManager = telemetryDataManager
         )
+        val elapsedTimeTelemetryDataObserver = TelemetryElapsedTimeObserver()
+        efPanel.addObserver(elapsedTimeTelemetryDataObserver)
         val panel = efPanel.createPanel()
 
         // Create the popup
@@ -186,8 +190,23 @@ abstract class ApplyExtractFunctionTransformationIntention(
         // Add onClosed listener
         efPopup.addListener(object : JBPopupListener {
             override fun onClosed(event: LightweightWindowEvent) {
+                elapsedTimeTelemetryDataObserver.update(
+                    EFNotification(
+                        EFTelemetryDataElapsedTimeNotificationPayload(TelemetryDataAction.STOP, 0)
+                    )
+                )
+                buildElapsedTimeTelemetryData(elapsedTimeTelemetryDataObserver)
                 highlighter.getAndSet(null).dropHighlight()
                 sendTelemetryData()
+            }
+
+            override fun beforeShown(event: LightweightWindowEvent) {
+                super.beforeShown(event)
+                elapsedTimeTelemetryDataObserver.update(
+                    EFNotification(
+                        EFTelemetryDataElapsedTimeNotificationPayload(TelemetryDataAction.START, 0)
+                    )
+                )
             }
         })
 
@@ -219,5 +238,13 @@ abstract class ApplyExtractFunctionTransformationIntention(
         return EFCandidatesTelemetryData(
             numberOfSuggestions = numberOfSuggestions, candidates = candidateTelemetryDataList
         )
+    }
+
+    private fun buildElapsedTimeTelemetryData(elapsedTimeTelemetryDataObserver: TelemetryElapsedTimeObserver) {
+        val elapsedTimeTelemetryData = elapsedTimeTelemetryDataObserver.getTelemetryData()
+        val efTelemetryData = telemetryDataManager.getData()
+        if (efTelemetryData != null) {
+            efTelemetryData.elapsedTime = elapsedTimeTelemetryData
+        }
     }
 }

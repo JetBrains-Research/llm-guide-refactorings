@@ -128,8 +128,7 @@ private fun isFunctionExtractableJava(
             result = false
             applicationResult = EFApplicationResult.FAIL
             reason = LLMBundle.message("extract.function.code.not.extractable.message")
-        }
-        else {
+        } else {
             try {
                 val allOptionsToExtract = findAllOptionsToExtract(elements)
                 if (allOptionsToExtract.isEmpty()) {
@@ -169,13 +168,12 @@ private fun isSelectionExtractableKotlin(
         result = false
         reason = LLMBundle.message("extract.function.entire.function.selection.message")
         applicationResult = EFApplicationResult.FAIL
+    } else if (!canSelectElementsForExtractionKotlin(efCandidate, editor, file)) {
+        result = false
+        reason = LLMBundle.message("extract.function.code.not.extractable.message")
+        applicationResult = EFApplicationResult.FAIL
     } else {
         try {
-            val efKotlinHandler = ExtractKotlinFunctionHandler()
-            editor.selectionModel.setSelection(efCandidate.offsetStart, efCandidate.offsetEnd)
-            efKotlinHandler.selectElements(editor, file) { elements, _ ->
-                result = elements.isNotEmpty()
-            }
             val elements = file.elementsInRange(TextRange(efCandidate.offsetStart, efCandidate.offsetEnd))
             val targetSibling = PsiUtils.getParentFunctionOrNull(elements[0], file.language)
             val extractionData = ExtractionData(file, elements.toRange(false), targetSibling!!)
@@ -184,8 +182,7 @@ private fun isSelectionExtractableKotlin(
                 result = false
                 reason = LLMBundle.message("extract.function.code.not.extractable.message")
                 applicationResult = EFApplicationResult.FAIL
-            }
-            else {
+            } else {
                 ExtractionGeneratorConfiguration(
                     analysisResult.descriptor!!,
                     ExtractionGeneratorOptions(
@@ -196,15 +193,29 @@ private fun isSelectionExtractableKotlin(
                 ).generateDeclaration()
             }
 
-        }
-        catch (t: Throwable) {
+        } catch (t: Throwable) {
             result = false
             reason = LLMBundle.message("extract.function.code.not.extractable.message")
             applicationResult = EFApplicationResult.FAIL
         }
     }
 
-    buildEFNotificationAndNotifyObservers( efCandidate, applicationResult, reason, observerList)
+    buildEFNotificationAndNotifyObservers(efCandidate, applicationResult, reason, observerList)
+    editor.selectionModel.removeSelection()
+    return result
+}
+
+fun canSelectElementsForExtractionKotlin(efCandidate: EFCandidate, editor: Editor, file: KtFile): Boolean {
+    var result = false
+    editor.selectionModel.setSelection(efCandidate.offsetStart, efCandidate.offsetEnd)
+    try {
+        ExtractKotlinFunctionHandler().selectElements(editor, file) { elements, _ ->
+            result = elements.isNotEmpty()
+        }
+    }
+    catch (t: Throwable) {
+        return result
+    }
     editor.selectionModel.removeSelection()
     return result
 }

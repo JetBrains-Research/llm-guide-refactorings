@@ -24,6 +24,9 @@ data class EFTelemetryData(
 
     @SerializedName("userSelectionTelemetryData")
     lateinit var userSelectionTelemetryData: EFUserSelectionTelemetryData
+
+    @SerializedName("elapsedTime")
+    lateinit var elapsedTime: List<CandidateElapsedTimeTelemetryData>
 }
 
 data class EFHostFunctionTelemetryData(
@@ -85,7 +88,15 @@ data class EFUserSelectionTelemetryData(
     var candidateType: EfCandidateType,
 
     @SerializedName("elementsType")
-    var elementsType: List<EFPsiElementsTypesTelemetryData>
+    var elementsType: List<EFPsiElementsTypesTelemetryData>,
+)
+
+data class CandidateElapsedTimeTelemetryData(
+    @SerializedName("candidateIndex")
+    var candidateIndex: Int,
+
+    @SerializedName("elapsedTime")
+    var elapsedTime: Long,
 )
 
 data class EFPsiElementsTypesTelemetryData(
@@ -94,6 +105,20 @@ data class EFPsiElementsTypesTelemetryData(
 
     @SerializedName("quantity")
     var quantity: Int,
+)
+
+
+enum class TelemetryDataAction() {
+    START,
+    STOP
+}
+
+data class EFTelemetryDataElapsedTimeNotificationPayload(
+    @SerializedName("action")
+    var action: TelemetryDataAction,
+
+    @SerializedName("currentSelectionIndex")
+    var selectionIndex: Int
 )
 
 class EFTelemetryDataManager {
@@ -186,7 +211,7 @@ class EFTelemetryDataUtils {
                 positionInHostFunction = positionInHostFunction,
                 selectedCandidateIndex = candidateIndex,
                 candidateType = efCandidate.type,
-                elementsType = EFTelemetryDataUtils.buildElementsTypeTelemetryData(efCandidate, file)
+                elementsType = EFTelemetryDataUtils.buildElementsTypeTelemetryData(efCandidate, file),
             )
         }
 

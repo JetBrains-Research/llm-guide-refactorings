@@ -45,3 +45,34 @@ class TelemetryDataObserver : Observer {
         }
     }
 }
+
+class TelemetryElapsedTimeObserver: Observer {
+    private val elapsedTime: HashMap<Int, Long> = HashMap()
+    private val candidateSelectionElapsedTime: HashMap<Int, Long> = HashMap()
+    private var currentSelectedIndex = 0
+    override fun update(notification: EFNotification) {
+        when (notification.payload) {
+            is EFTelemetryDataElapsedTimeNotificationPayload -> {
+                when (notification.payload.action) {
+                    TelemetryDataAction.START -> {
+                        currentSelectedIndex = notification.payload.selectionIndex
+                        candidateSelectionElapsedTime[currentSelectedIndex] = System.currentTimeMillis()
+                        println("started index: $currentSelectedIndex at: ${candidateSelectionElapsedTime[currentSelectedIndex]}")
+                    }
+                    TelemetryDataAction.STOP -> {
+                        val elapsed = System.currentTimeMillis() - candidateSelectionElapsedTime.getOrDefault(currentSelectedIndex, 0)
+                        val cumulated = elapsedTime.getOrDefault(currentSelectedIndex, 0) + elapsed
+                        elapsedTime[currentSelectedIndex] = cumulated
+                        println("stopped $currentSelectedIndex, elapsed: $elapsed, cumulated: $cumulated")
+                    }
+                }
+            }
+        }
+    }
+
+    fun getTelemetryData(): List<CandidateElapsedTimeTelemetryData> {
+        return elapsedTime.map {
+            CandidateElapsedTimeTelemetryData(it.key, it.value)
+        }
+    }
+}

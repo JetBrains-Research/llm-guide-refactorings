@@ -28,4 +28,8 @@ data class EFCandidate(
 
     @SerializedName("type")
     lateinit var type: EfCandidateType
+
+    fun isValid(): Boolean {
+        return type != EfCandidateType.INVALID
+    }
 }

@@ -1,5 +1,6 @@
 package com.intellij.ml.llm.template.utils
 
+import com.intellij.lang.Language
 import com.intellij.ml.llm.template.extractfunction.EFCandidate
 import com.intellij.ml.llm.template.extractfunction.EFSuggestion
 import com.intellij.ml.llm.template.extractfunction.EfCandidateType
@@ -8,6 +9,7 @@ import com.intellij.psi.*
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.refactoring.suggested.endOffset
 import com.intellij.refactoring.suggested.startOffset
+import org.jetbrains.kotlin.idea.base.psi.getLineCount
 import org.jetbrains.kotlin.idea.base.psi.getLineNumber
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.KtBlockExpression
@@ -17,7 +19,7 @@ class EFCandidateFactory {
     fun buildCandidates(efSuggestion: EFSuggestion, editor: Editor, file: PsiFile): HashSet<EFCandidate> {
         val candidates = HashSet<EFCandidate>()
 
-        if (!isValid(efSuggestion)) {
+        if (!isValid(efSuggestion, file)) {
             buildInvalidCandidate(efSuggestion).let { candidates.add(it) }
             return candidates
         }
@@ -66,7 +68,7 @@ class EFCandidateFactory {
             return null
         }
 
-        val adjustedRegion = adjustRegion(psiElementStart, psiElementEnd) ?: return null
+        val adjustedRegion = adjustRegion(psiElementStart, psiElementEnd, file.language) ?: return null
         return EFCandidate(
             functionName = efSuggestion.functionName,
             offsetStart = adjustedRegion.first.startOffset,
@@ -92,9 +94,39 @@ class EFCandidateFactory {
      *
      * If the selection has lines 10-13 (included), then it will enlarge the selection to lines 10-14 (included)
      */
-    private fun adjustRegion(psiElementStart: PsiElement, psiElementEnd: PsiElement): Pair<PsiElement, PsiElement>? {
+    private fun adjustRegion(
+        psiElementStart: PsiElement,
+        psiElementEnd: PsiElement,
+        language: Language
+    ): Pair<PsiElement, PsiElement>? {
         var start = psiElementStart
         var end = psiElementEnd
+
+        // both start and end should belong to the same function
+        if (!PsiUtils.elementsBelongToSameFunction(start, end, language)) return null
+
+        // if the start/end are inside the argument list, then bubble up to function call
+        if (PsiUtils.isElementArgumentOrArgumentList(start, language)) {
+            start = PsiUtils.getParentFunctionCallOrNull(start, language) ?: start
+        }
+        if (PsiUtils.isElementArgumentOrArgumentList(end, language)) {
+            end = PsiUtils.getParentFunctionCallOrNull(end, language) ?: end
+        }
+
+        // if the start/end are inside the parameter list, then bubble up to function declaration
+        if (PsiUtils.isElementParameterOrParameterList(start, language)) {
+            start = PsiUtils.getParentFunctionOrNull(start, language) ?: start
+        }
+        if (PsiUtils.isElementParameterOrParameterList(end, language)) {
+            end = PsiUtils.getParentFunctionOrNull(end, language) ?: end
+        }
+
+        // if start is parent of end, then assign end to start
+        if (PsiTreeUtil.isAncestor(start, end, true)) {
+            end = start
+        } else if (PsiTreeUtil.isAncestor(end, start, true)) {
+            start = end
+        }
 
         // shift right to the first non-brace and non-white space element on the same line
         while ((start.node.elementType == KtTokens.LBRACE || start.node.elementType == JavaTokenType.LBRACE || start is PsiWhiteSpace) &&
@@ -103,11 +135,7 @@ class EFCandidateFactory {
             start = start.nextSibling
         }
 
-        var commonParent = PsiTreeUtil.findCommonParent(psiElementStart, psiElementEnd)
-
-        if (commonParent == null) {
-            return null
-        }
+        var commonParent = PsiTreeUtil.findCommonParent(start, end) ?: return null
 
         if (commonParent == start || commonParent == end || (commonParent !is PsiBlockStatement && commonParent !is PsiCodeBlock && commonParent !is PsiModifiableCodeBlock)) {
             start = commonParent
@@ -189,8 +217,8 @@ class EFCandidateFactory {
         return psiElement
     }
 
-    private fun isValid(efSuggestion: EFSuggestion): Boolean {
-        return efSuggestion.lineStart > 0 && efSuggestion.lineEnd > 0
+    private fun isValid(efSuggestion: EFSuggestion, file: PsiFile): Boolean {
+        return (efSuggestion.lineStart in (1 until file.getLineCount())) && (efSuggestion.lineEnd in (1 until file.getLineCount()))
     }
 
     private fun buildInvalidCandidate(efSuggestion: EFSuggestion): EFCandidate {

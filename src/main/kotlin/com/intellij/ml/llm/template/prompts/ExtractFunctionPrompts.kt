@@ -8,7 +8,7 @@ fun fewShotExtractSuggestion(methodCode: String) = mutableListOf(
         """
                 You are a skilled software developer. You have immense knowledge on software refactoring. 
                 You communicate with a remote server that sends you code of functions (one function in a message) that it wants to simplify by applying extract method refactoring. 
-                In return, you send a JSON object with suggestions of helpful extract method refactorings. 
+                In return, you send a JSON object with suggestions of helpful extract method refactorings. It is important for suggestions to not contain the entire function body.
                 Each suggestion consists of the start line, end line, and name for the extracted function.
                 The JSON should have the following format: [{"function_name": <new function name>, "line_start": <line start>, "line_end": <line end>}, ..., ].
                 """.trimIndent()

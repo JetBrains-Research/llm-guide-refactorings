@@ -72,7 +72,7 @@ class MyMethodExtractor (private val functionNameProvider: FunctionNameProvider?
         }
     }
 
-    private fun findAndSelectExtractOption(editor: Editor, file: PsiFile, range: TextRange): CompletableFuture<ExtractOptions>? {
+    fun findAndSelectExtractOption(editor: Editor, file: PsiFile, range: TextRange): CompletableFuture<ExtractOptions>? {
         try {
             if (!CommonRefactoringUtil.checkReadOnlyStatus(file.project, file)) return null
             val elements = ExtractSelector().suggestElementsToExtract(file, range)

@@ -47,7 +47,7 @@ tasks {
     }
 
     buildPlugin {
-            archiveFileName.set("llm-integration-template.zip")
+            archiveFileName.set("llm-extract-function.zip")
     }
 
     patchPluginXml {

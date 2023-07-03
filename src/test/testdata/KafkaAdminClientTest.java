@@ -146,4 +146,12 @@ public class KafkaAdminClientTest {
         int y = 2;
         int sum = x + y;
         return sum; }
+
+    private int sum(
+            int a,
+            int b,
+            int c
+    ) {
+        return a + b + c
+    }
 }

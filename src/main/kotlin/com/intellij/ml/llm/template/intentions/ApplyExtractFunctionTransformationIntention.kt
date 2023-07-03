@@ -117,7 +117,6 @@ abstract class ApplyExtractFunctionTransformationIntention(
             )
         }.sortedByDescending { it.lineEnd - it.lineStart }
 
-
         return filteredCandidates
     }
 

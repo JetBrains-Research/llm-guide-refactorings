@@ -5,7 +5,7 @@
 
 <!-- Plugin description -->
 Researching collaboration between LLMs and IDEs to perform automated Extract Function refactoring. It combines the 
-power of ChatGPT to provide suggestions about what fragments of code can be extracted from a large function, but leverage
+power of ChatGPT to provide suggestions about what fragments of code can be extracted from a large function, but leverages
 the reliability of IntelliJ IDE to carry out correctly the code transformations.
 <!-- Plugin description end -->
 
@@ -66,6 +66,7 @@ Below this list, there's a panel showing the new function's signature. It includ
 3. The list of parameters
 4. The return value (if any)
 5. The body of the function is just three dots (...)
+6. The actual code to be extracted is highlighted in the main editor
 
 To invoke the actual extraction, you can choose any of the candidates from the list, and you can either hit *Enter*,
 *double click*, or press the *Extract* button on the bottom left. If none of the proposed candidates suits your needs,

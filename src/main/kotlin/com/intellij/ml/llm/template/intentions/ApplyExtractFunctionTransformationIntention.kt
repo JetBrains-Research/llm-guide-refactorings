@@ -27,6 +27,7 @@ import com.intellij.openapi.ui.popup.JBPopupListener
 import com.intellij.openapi.ui.popup.LightweightWindowEvent
 import com.intellij.psi.PsiFile
 import com.intellij.ui.awt.RelativePoint
+import org.jetbrains.kotlin.util.capitalizeDecapitalize.toLowerCaseAsciiOnly
 import java.awt.Point
 import java.awt.Rectangle
 import java.util.concurrent.atomic.AtomicReference
@@ -68,7 +69,8 @@ abstract class ApplyExtractFunctionTransformationIntention(
                 EFTelemetryDataUtils.buildHostFunctionTelemetryData(
                     codeSnippet = codeSnippet,
                     lineStart = startLineNumber,
-                    bodyLineStart = PsiUtils.getFunctionBodyStartLine(namedElement)
+                    bodyLineStart = PsiUtils.getFunctionBodyStartLine(namedElement),
+                    language = file.language.id.toLowerCaseAsciiOnly()
                 )
             )
 

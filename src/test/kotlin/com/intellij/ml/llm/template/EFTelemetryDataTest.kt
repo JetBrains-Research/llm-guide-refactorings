@@ -32,7 +32,8 @@ class EFTelemetryDataTest : LightPlatformCodeInsightTestCase() {
             hostFunctionSize = 10,
             lineStart = 5,
             lineEnd = 14,
-            bodyLineStart = 6
+            bodyLineStart = 6,
+            language = "java"
         )
         val efAppTelemetryObserver = EFCandidatesApplicationTelemetryObserver()
         efAppTelemetryObserver.update(
@@ -115,14 +116,16 @@ class EFTelemetryDataTest : LightPlatformCodeInsightTestCase() {
             hostFunctionSize = 8,
             lineStart = 5,
             lineEnd = 12,
-            bodyLineStart = 6
+            bodyLineStart = 6,
+            language = "java"
         )
         TestCase.assertEquals(
             expectedEFHostFunctionTelemetryData,
             EFTelemetryDataUtils.buildHostFunctionTelemetryData(
                 codeSnippet = codeSnippet,
                 lineStart = 5,
-                bodyLineStart = 6
+                bodyLineStart = 6,
+                language = "java"
             )
         )
     }

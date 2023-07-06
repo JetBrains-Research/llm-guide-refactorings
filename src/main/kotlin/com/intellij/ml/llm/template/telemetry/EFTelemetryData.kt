@@ -41,6 +41,9 @@ data class EFHostFunctionTelemetryData(
 
     @SerializedName("bodyLineStart")
     var bodyLineStart: Int,
+
+    @SerializedName("language")
+    var language: String
 )
 
 data class EFCandidatesTelemetryData(
@@ -164,14 +167,16 @@ class EFTelemetryDataUtils {
         fun buildHostFunctionTelemetryData(
             codeSnippet: String,
             lineStart: Int,
-            bodyLineStart: Int
+            bodyLineStart: Int,
+            language: String
         ): EFHostFunctionTelemetryData {
             val functionSize = codeSnippet.lines().size
             return EFHostFunctionTelemetryData(
                 lineStart = lineStart,
                 lineEnd = lineStart + functionSize - 1,
                 hostFunctionSize = functionSize,
-                bodyLineStart = bodyLineStart
+                bodyLineStart = bodyLineStart,
+                language = language
             )
         }
 

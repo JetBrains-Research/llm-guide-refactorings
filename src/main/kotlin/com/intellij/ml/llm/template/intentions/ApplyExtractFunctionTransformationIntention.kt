@@ -30,6 +30,7 @@ import com.intellij.ui.awt.RelativePoint
 import org.jetbrains.kotlin.util.capitalizeDecapitalize.toLowerCaseAsciiOnly
 import java.awt.Point
 import java.awt.Rectangle
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 
@@ -40,6 +41,7 @@ abstract class ApplyExtractFunctionTransformationIntention(
     private val logger = Logger.getInstance("#com.intellij.ml.llm")
     private val codeTransformer = CodeTransformer()
     private val telemetryDataManager = EFTelemetryDataManager()
+    private var llmResponseTime = 0L
 
     init {
         codeTransformer.addObserver(EFLoggerObserver(logger))
@@ -86,11 +88,13 @@ abstract class ApplyExtractFunctionTransformationIntention(
             project, LLMBundle.message("intentions.request.extract.function.background.process.title")
         ) {
             override fun run(indicator: ProgressIndicator) {
+                val now = System.nanoTime()
                 val response = sendChatRequest(
                     project, messageList, efLLMRequestProvider.chatModel, efLLMRequestProvider
                 )
                 if (response != null) {
                     invokeLater {
+                        llmResponseTime = System.nanoTime() - now
                         if (response.getSuggestions().isEmpty()) {
                             showEFNotification(
                                 project,
@@ -123,6 +127,8 @@ abstract class ApplyExtractFunctionTransformationIntention(
     }
 
     private fun processLLMResponse(response: LLMBaseResponse, project: Project, editor: Editor, file: PsiFile) {
+        val now = System.nanoTime()
+
         val llmResponse = response.getSuggestions()[0]
         val efSuggestionList = identifyExtractFunctionSuggestions(llmResponse.text)
         val candidates = EFCandidateFactory().buildCandidates(efSuggestionList.suggestionList, editor, file).toList()
@@ -133,6 +139,7 @@ abstract class ApplyExtractFunctionTransformationIntention(
                 NotificationType.INFORMATION
             )
             telemetryDataManager.addCandidatesTelemetryData(buildCandidatesTelemetryData(0, emptyList()))
+            buildProcessingTimeTelemetryData(llmResponseTime, System.nanoTime() - now)
             sendTelemetryData()
         } else {
             val candidatesApplicationTelemetryObserver = EFCandidatesApplicationTelemetryObserver()
@@ -144,6 +151,7 @@ abstract class ApplyExtractFunctionTransformationIntention(
                     candidatesApplicationTelemetryObserver.getData()
                 )
             )
+            buildProcessingTimeTelemetryData(llmResponseTime, System.nanoTime() - now)
 
             if (filteredCandidates.isEmpty()) {
                 showEFNotification(
@@ -229,6 +237,20 @@ abstract class ApplyExtractFunctionTransformationIntention(
         val efTelemetryData = telemetryDataManager.getData()
         if (efTelemetryData != null) {
             TelemetryDataObserver().update(EFNotification(efTelemetryData))
+        }
+    }
+
+    private fun buildProcessingTimeTelemetryData(llmResponseTime: Long, pluginProcessingTime: Long) {
+        val llmResponseTimeMillis = TimeUnit.NANOSECONDS.toMillis(llmResponseTime)
+        val pluginProcessingTimeMillis = TimeUnit.NANOSECONDS.toMillis(pluginProcessingTime)
+        val efTelemetryData = telemetryDataManager.getData()
+        if (efTelemetryData != null) {
+            efTelemetryData.processingTime = EFTelemetryDataProcessingTime(
+
+                llmResponseTime = llmResponseTimeMillis,
+                pluginProcessingTime = pluginProcessingTimeMillis,
+                totalTime = llmResponseTimeMillis + pluginProcessingTimeMillis
+            )
         }
     }
 

@@ -27,6 +27,9 @@ data class EFTelemetryData(
 
     @SerializedName("elapsedTime")
     lateinit var elapsedTime: List<CandidateElapsedTimeTelemetryData>
+
+    @SerializedName("processingTime")
+    lateinit var processingTime: EFTelemetryDataProcessingTime
 }
 
 data class EFHostFunctionTelemetryData(
@@ -122,6 +125,17 @@ data class EFTelemetryDataElapsedTimeNotificationPayload(
 
     @SerializedName("currentSelectionIndex")
     var selectionIndex: Int
+)
+
+data class EFTelemetryDataProcessingTime(
+    @SerializedName("llmResponseTime")
+    var llmResponseTime: Long,
+
+    @SerializedName("pluginProcessingTime")
+    var pluginProcessingTime: Long,
+
+    @SerializedName("totalTime")
+    var totalTime: Long
 )
 
 class EFTelemetryDataManager {

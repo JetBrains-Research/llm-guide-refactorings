@@ -7,7 +7,10 @@ dependencies {
     implementation("org.junit.jupiter:junit-jupiter:5.8.1")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.mongodb:mongodb-driver-sync:4.9.0") // added this line for MongoDB driver
+    testImplementation("org.eclipse.jgit:org.eclipse.jgit:6.6.0.202305301015-r")
     implementation(kotlin("stdlib-jdk8"))
+    implementation(project(":common"))
+    testImplementation(project(":common"))
 }
 
 plugins {

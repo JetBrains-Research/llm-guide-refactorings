@@ -1,6 +1,6 @@
 package com.intellij.ml.llm.template.intentions
 
-import com.intellij.ml.llm.template.LLMBundle
+import com.intellij.ml.llm.template.common.LLMBundle
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages

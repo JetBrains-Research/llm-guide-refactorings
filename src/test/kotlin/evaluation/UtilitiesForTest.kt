@@ -1,9 +1,9 @@
 package evaluation
 
-import com.intellij.ml.llm.template.common.extractfunction.EFCandidate
-import com.intellij.ml.llm.template.common.extractfunction.MethodExtractionType
-import com.intellij.ml.llm.template.common.utils.CodeTransformer
-import com.intellij.ml.llm.template.common.utils.EFCandidatesApplicationTelemetryObserver
+import com.intellij.ml.llm.template.extractfunction.EFCandidate
+import com.intellij.ml.llm.template.extractfunction.MethodExtractionType
+import com.intellij.ml.llm.template.utils.CodeTransformer
+import com.intellij.ml.llm.template.utils.EFCandidatesApplicationTelemetryObserver
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange

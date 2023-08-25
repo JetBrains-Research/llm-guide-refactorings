@@ -1,7 +1,7 @@
 package evaluation
 
-import com.intellij.ml.llm.template.common.extractfunction.EFCandidate
-import com.intellij.ml.llm.template.common.utils.PsiUtils
+import com.intellij.ml.llm.template.extractfunction.EFCandidate
+import com.intellij.ml.llm.template.utils.PsiUtils
 import com.intellij.refactoring.suggested.endOffset
 import com.intellij.refactoring.suggested.startOffset
 import com.intellij.testFramework.LightPlatformCodeInsightTestCase

@@ -1,10 +1,10 @@
 package evaluation
 
 import com.intellij.codeInsight.CodeInsightUtil
-import com.intellij.ml.llm.template.common.extractfunction.EFSuggestion
-import com.intellij.ml.llm.template.common.utils.EFCandidateFactory
-import com.intellij.ml.llm.template.common.utils.PsiUtils
-import com.intellij.ml.llm.template.common.utils.isCandidateExtractable
+import com.intellij.ml.llm.template.extractfunction.EFSuggestion
+import com.intellij.ml.llm.template.utils.EFCandidateFactory
+import com.intellij.ml.llm.template.utils.PsiUtils
+import com.intellij.ml.llm.template.utils.isCandidateExtractable
 import com.intellij.ml.llm.template.utils.CodeMetricsUtils
 import com.intellij.psi.PsiStatement
 import com.intellij.psi.util.PsiTreeUtil

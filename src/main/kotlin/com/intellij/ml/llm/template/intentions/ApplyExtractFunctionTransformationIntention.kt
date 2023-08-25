@@ -2,16 +2,16 @@ package com.intellij.ml.llm.template.intentions
 
 import com.intellij.codeInsight.intention.IntentionAction
 import com.intellij.codeInsight.unwrap.ScopeHighlighter
-import com.intellij.ml.llm.template.common.LLMBundle
-import com.intellij.ml.llm.template.common.extractfunction.EFCandidate
-import com.intellij.ml.llm.template.common.models.GPTExtractFunctionRequestProvider
-import com.intellij.ml.llm.template.common.models.LLMBaseResponse
-import com.intellij.ml.llm.template.common.models.LLMRequestProvider
-import com.intellij.ml.llm.template.common.models.sendChatRequest
-import com.intellij.ml.llm.template.common.prompts.fewShotExtractSuggestion
-import com.intellij.ml.llm.template.common.telemetry.*
-import com.intellij.ml.llm.template.common.utils.*
+import com.intellij.ml.llm.template.LLMBundle
+import com.intellij.ml.llm.template.extractfunction.EFCandidate
+import com.intellij.ml.llm.template.models.GPTExtractFunctionRequestProvider
+import com.intellij.ml.llm.template.models.LLMBaseResponse
+import com.intellij.ml.llm.template.models.LLMRequestProvider
+import com.intellij.ml.llm.template.models.sendChatRequest
+import com.intellij.ml.llm.template.prompts.fewShotExtractSuggestion
+import com.intellij.ml.llm.template.telemetry.*
 import com.intellij.ml.llm.template.ui.ExtractFunctionPanel
+import com.intellij.ml.llm.template.utils.*
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.diagnostic.Logger
@@ -131,7 +131,7 @@ abstract class ApplyExtractFunctionTransformationIntention(
         val llmResponse = response.getSuggestions()[0]
         val efSuggestionList = identifyExtractFunctionSuggestions(llmResponse.text)
         val builtCandidates = EFCandidateFactory().buildCandidates(efSuggestionList.suggestionList, editor, file).toList()
-        val candidates = removeDuplicates(builtCandidates)
+        val candidates = builtCandidates.distinct()
         if (candidates.isEmpty()) {
             showEFNotification(
                 project,

@@ -1,11 +1,12 @@
 package evaluation
 
-import com.intellij.ml.llm.template.common.extractfunction.EFCandidate
-import com.intellij.ml.llm.template.common.extractfunction.EfCandidateType
-import com.intellij.ml.llm.template.common.models.LLMBaseResponse
-import com.intellij.ml.llm.template.common.utils.EFApplicationResult
-import com.intellij.ml.llm.template.common.utils.EFCandidateApplicationPayload
-import com.intellij.ml.llm.template.common.utils.EFCandidatesApplicationTelemetryObserver
+import com.intellij.ml.llm.template.extractfunction.EFCandidate
+import com.intellij.ml.llm.template.extractfunction.EFMultishotCandidate
+import com.intellij.ml.llm.template.extractfunction.EfCandidateType
+import com.intellij.ml.llm.template.models.LLMBaseResponse
+import com.intellij.ml.llm.template.utils.EFApplicationResult
+import com.intellij.ml.llm.template.utils.EFCandidateApplicationPayload
+import com.intellij.ml.llm.template.utils.EFCandidatesApplicationTelemetryObserver
 import com.intellij.testFramework.LightPlatformCodeInsightTestCase
 import com.mongodb.client.MongoClient
 import com.mongodb.client.MongoClients
@@ -59,14 +60,6 @@ data class EFSimpleCandidate(
     lateinit var applicationResultReason: String
 }
 
-data class EFTry(
-    val efCandidates: List<EFCandidate>,
-    val efCandidateApplicationPayloadList: List<EFCandidateApplicationPayload>,
-    val llmRawResponse: LLMBaseResponse?,
-    val llmProcessingTime: Long,
-    val jetGPTProcessingTime: Long,
-    val tryNumber: Int
-)
 
 class EFOnOracle : LightPlatformCodeInsightTestCase() {
     private var mongoClient: MongoClient = MongoClients.create("mongodb://localhost:27017")
@@ -343,7 +336,7 @@ class EFOnOracle : LightPlatformCodeInsightTestCase() {
     }
 
     private fun buildTryBreakdown(
-        triesMap: Map<Int, EFTry>,
+        triesMap: Map<Int, EFMultishotCandidate>,
         githubUrl: String,
         filename: String,
         mongoCollection: MongoCollection<Document>,
@@ -373,7 +366,7 @@ class EFOnOracle : LightPlatformCodeInsightTestCase() {
     }
 
     private fun buildTotalResponse(
-        triesMap: Map<Int, EFTry>,
+        triesMap: Map<Int, EFMultishotCandidate>,
         githubUrl: String,
         filename: String,
         mongoCollection: MongoCollection<Document>,
@@ -409,9 +402,9 @@ class EFOnOracle : LightPlatformCodeInsightTestCase() {
         lineStart: Int,
         lineEnd: Int,
         docId: Any?
-    ): Map<Int, EFTry> {
+    ): Map<Int, EFMultishotCandidate> {
         val numberOfTries = 5
-        val triesMap: MutableMap<Int, EFTry> = mutableMapOf()
+        val triesMap: MutableMap<Int, EFMultishotCandidate> = mutableMapOf()
         for (currentTry in 1..numberOfTries) {
             val candidateApplicationObserver = EFCandidatesApplicationTelemetryObserver()
             try {
@@ -425,7 +418,7 @@ class EFOnOracle : LightPlatformCodeInsightTestCase() {
                         file,
                         candidateApplicationObserver
                     ) as List<EFCandidate>
-                val efTry = EFTry(
+                val efTry = EFMultishotCandidate(
                     efCandidates = currentCandidates,
                     efCandidateApplicationPayloadList = candidateApplicationObserver.getData(),
                     llmRawResponse = jetGPTCandidatesProducer.llmRawResponse,

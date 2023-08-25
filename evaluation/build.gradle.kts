@@ -20,22 +20,23 @@ repositories {
 
 
 dependencies {
-    testImplementation(platform("org.junit:junit-bom:5.9.1"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
-    implementation(kotlin("stdlib-jdk8"))
+    implementation("org.junit.jupiter:junit-jupiter:5.8.1")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.mongodb:mongodb-driver-sync:4.9.0") // added this line for MongoDB driver
+    testImplementation("org.eclipse.jgit:org.eclipse.jgit:6.6.0.202305301015-r")
     implementation("org.mongodb:mongodb-driver-sync:4.9.0") // added this line for MongoDB driver
     implementation("org.eclipse.jgit:org.eclipse.jgit:6.6.0.202305301015-r")
-    implementation("org.jetbrains.kotlinx:kotlinx-cli:0.3.5")
+    implementation(kotlin("stdlib-jdk8"))
     implementation(project(":common"))
 }
 
-tasks.test {
-    useJUnitPlatform()
+kotlin {
+    jvmToolchain(17)
 }
 
-tasks.register<JavaExec>("myRun") {
-    main = "FireHouseCliKt"  // Note the "Kt" suffix for top-level functions in Kotlin
-    classpath = sourceSets["main"].runtimeClasspath
-    val arguments = if (project.hasProperty("appArgs")) project.property("appArgs") as String else ""
-    args(arguments.split(" "))
-}
+//tasks.register<JavaExec>("myRun") {
+//    main = "FireHouseCliKt"  // Note the "Kt" suffix for top-level functions in Kotlin
+//    classpath = sourceSets["main"].runtimeClasspath
+//    val arguments = if (project.hasProperty("appArgs")) project.property("appArgs") as String else ""
+//    args(arguments.split(" "))
+//}

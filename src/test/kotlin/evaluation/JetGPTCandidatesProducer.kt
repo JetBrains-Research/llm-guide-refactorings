@@ -1,12 +1,12 @@
 package evaluation
 
-import com.intellij.ml.llm.template.common.extractfunction.EFCandidate
-import com.intellij.ml.llm.template.common.models.GPTExtractFunctionRequestProvider
-import com.intellij.ml.llm.template.common.models.LLMBaseResponse
-import com.intellij.ml.llm.template.common.models.LLMRequestProvider
-import com.intellij.ml.llm.template.common.models.sendChatRequest
-import com.intellij.ml.llm.template.common.prompts.fewShotExtractSuggestion
-import com.intellij.ml.llm.template.common.utils.*
+import com.intellij.ml.llm.template.extractfunction.EFCandidate
+import com.intellij.ml.llm.template.models.GPTExtractFunctionRequestProvider
+import com.intellij.ml.llm.template.models.LLMBaseResponse
+import com.intellij.ml.llm.template.models.LLMRequestProvider
+import com.intellij.ml.llm.template.models.sendChatRequest
+import com.intellij.ml.llm.template.prompts.fewShotExtractSuggestion
+import com.intellij.ml.llm.template.utils.*
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiFile
@@ -34,10 +34,10 @@ class JetGPTCandidatesProducer {
 
         // communicate with ChatGPT
         var startTime = System.nanoTime()
-        llmRawResponse = sendChatRequest(
+        val llmRawResponse = sendChatRequest(
             project, messageList, efLLMRequestProvider.chatModel, efLLMRequestProvider
         )
-        llmProcessingTime = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime)
+        val llmProcessingTime = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime)
 
         // postprocess ChatGPT reply
         startTime = System.nanoTime()

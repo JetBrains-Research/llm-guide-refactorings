@@ -1,8 +1,7 @@
 package com.intellij.ml.llm.template.utils
 
 import com.intellij.codeInsight.CodeInsightUtil
-import com.intellij.ml.llm.template.common.extractfunction.EFCandidate
-import com.intellij.ml.llm.template.common.utils.PsiUtils
+import com.intellij.ml.llm.template.extractfunction.EFCandidate
 import com.intellij.psi.*
 import com.intellij.psi.util.PsiTreeUtil
 import org.jetbrains.kotlin.psi.*

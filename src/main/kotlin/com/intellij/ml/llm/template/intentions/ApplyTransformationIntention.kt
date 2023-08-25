@@ -1,10 +1,10 @@
 package com.intellij.ml.llm.template.intentions
 
 import com.intellij.codeInsight.intention.IntentionAction
-import com.intellij.ml.llm.template.common.LLMBundle
-import com.intellij.ml.llm.template.common.models.CodexRequestProvider
-import com.intellij.ml.llm.template.common.models.LLMRequestProvider
-import com.intellij.ml.llm.template.common.models.sendEditRequest
+import com.intellij.ml.llm.template.LLMBundle
+import com.intellij.ml.llm.template.models.CodexRequestProvider
+import com.intellij.ml.llm.template.models.LLMRequestProvider
+import com.intellij.ml.llm.template.models.sendEditRequest
 import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.diagnostic.Logger

@@ -49,6 +49,7 @@ class FireHouseCsvReader(val mongoManager: MongoManager, val args: FHCsvReaderAr
                 .append("author_name", csvRow[1])
                 .append("committer_name", csvRow[2])
                 .append("filename", csvRow[3])
+                .append("remote_filename", csvRow[3].replace(args.projectPath, ""))
                 .append("class_name", csvRow[4])
                 .append("function_name", csvRow[5])
                 .append("start_line", csvRow[6].toInt())
@@ -56,7 +57,8 @@ class FireHouseCsvReader(val mongoManager: MongoManager, val args: FHCsvReaderAr
                 .append("hf_loc", csvRow[8].toInt())
                 .append("github_url", csvRow[9])
                 .append("github_diff_url", csvRow[10])
-                .append("timestamp", csvRow[11])
+                .append("commit_date", csvRow[11])
+                .append("timestamp", csvRow[12])
             result.add(mongoDoc)
         }
 
@@ -67,9 +69,9 @@ class FireHouseCsvReader(val mongoManager: MongoManager, val args: FHCsvReaderAr
 class FireHouseCsvReaderTest: LightPlatformCodeInsightTestCase() {
     fun `test build dataset`() {
         val args = FHCsvReaderArgs(
-            filename = "/Users/dpomian/hardwork/research/jetbrains/extract_method_firehouse/output/JetBrains_intellij-community_20230822_1828.csv",
-            db = "ef_evaluation/firehouse_ijce",
-            projectPath = "/Users/dpomian/hardwork/research/jetbrains/extract_method_firehouse/githubclones/JetBrains/intellij-community",
+            filename = "path/to/csv/file",
+            db = "dbName/collectionName",
+            projectPath = "path/to/local/github",
             updateDocs = true
         )
 

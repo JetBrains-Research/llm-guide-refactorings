@@ -35,7 +35,9 @@ class JetGPTCandidatesProducer {
         // communicate with ChatGPT
         var startTime = System.nanoTime()
         val llmRawResponse = sendChatRequest(
-            project, messageList, efLLMRequestProvider.chatModel, efLLMRequestProvider
+            project = project,
+            messages = messageList,
+            model = efLLMRequestProvider.chatModel
         )
         val llmProcessingTime = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime)
 

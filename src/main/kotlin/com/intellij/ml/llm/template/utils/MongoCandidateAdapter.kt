@@ -1,6 +1,8 @@
 package com.intellij.ml.llm.template.utils
 
 import com.google.gson.Gson
+import com.intellij.ml.llm.template.evaluation.HostFunctionData
+import com.intellij.ml.llm.template.evaluation.OracleData
 import com.intellij.ml.llm.template.extractfunction.EFCandidate
 import com.intellij.ml.llm.template.extractfunction.EFMultishotCandidate
 import com.intellij.ml.llm.template.models.LlmMultishotResponseData
@@ -47,7 +49,7 @@ class MongoCandidateAdapter {
             return resultDocument
         }
 
-        private fun adaptCandidate(
+        fun adaptCandidate(
             candidate: EFCandidate,
             applicationPayload: EFCandidateApplicationPayload
         ): Document {
@@ -74,6 +76,8 @@ class MongoCandidateAdapter {
             val result = adaptCandidate(candidate, applicationPayload)
                 .append("popularity", candidate.popularity)
                 .append("heat", candidate.heat)
+                .append("overlap", candidate.overlap)
+                .append("heuristic", candidate.heuristic)
             return result
         }
 
@@ -112,7 +116,9 @@ class MongoCandidateAdapter {
             return candidateDocsMap.keys.toList()
         }
 
-        fun llmMultishotResponseData2Mongo(llmMultishotResponseDataList: List<LlmMultishotResponseData>): List<Document> {
+        fun llmMultishotResponseData2Mongo(
+            llmMultishotResponseDataList: List<LlmMultishotResponseData>
+        ): List<Document> {
             val grouped = llmMultishotResponseDataList.groupBy { it.shotNo }
             val result = mutableListOf<Document>()
             for ((shotNo, multishotResponseDataList) in grouped) {
@@ -129,18 +135,47 @@ class MongoCandidateAdapter {
             return result
         }
 
-        fun mongo2LLMMultishotResponseData(documents: List<Document>) : List<LlmMultishotResponseData> {
+        fun mongo2LLMMultishotResponseData(documents: List<Document>): List<LlmMultishotResponseData> {
             val llmMultishotResponseDataList = mutableListOf<LlmMultishotResponseData>()
             documents.forEach { document ->
                 val llmMultishotResponseData = LlmMultishotResponseData(
                     shotNo = document.getInteger("shot_no"),
                     processingTime = document.getLong("llm_processing_time"),
-                    llmResponse = Gson().fromJson(document.getString("llm_raw_response"), OpenAIChatResponse::class.java)
+                    llmResponse = Gson().fromJson(
+                        document.getString("llm_raw_response"),
+                        OpenAIChatResponse::class.java
+                    )
                 )
                 llmMultishotResponseDataList.add(llmMultishotResponseData)
             }
 
             return llmMultishotResponseDataList.sortedBy { it.shotNo }
+        }
+
+        fun mongo2Oracle(document: Document): OracleData {
+            val hfDoc = document.get("host_function_before_ef") as Document
+            val hfGithubUrl = hfDoc.getString("url")
+            val (hfLineStart, hfLineEnd) = extractLinesFromGithubUrl(hfGithubUrl)
+            val hfBodyLoc = hfDoc.getInteger("hf_body_loc")
+            val oracleDoc = (document.get("oracle") as Document)
+            val ebLoc = oracleDoc.getInteger("loc")
+            val ebLineStart = oracleDoc.getInteger("line_start")
+            val ebLineEnd = oracleDoc.getInteger("line_end")
+            val filename = oracleDoc.getString("filename")
+            val resultHf = HostFunctionData(
+                lineStart = hfLineStart,
+                lineEnd = hfLineEnd,
+                bodyLoc = hfBodyLoc ?: (hfLineEnd - hfLineStart + 1),
+                githubUrl = hfGithubUrl
+            )
+            val result = OracleData(
+                hostFunctionData = resultHf,
+                loc = ebLoc,
+                lineStart = ebLineStart,
+                lineEnd = ebLineEnd,
+                filename = filename,
+            )
+            return result
         }
     }
 }

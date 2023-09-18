@@ -35,6 +35,12 @@ data class EFCandidate(
     @SerializedName("heat")
     var heat: Int = -1
 
+    @SerializedName("overlap")
+    var overlap: Int = 0
+
+    @SerializedName("heuristic")
+    var heuristic = ""
+
     @SerializedName("length")
     val length = lineEnd - lineStart + 1
 

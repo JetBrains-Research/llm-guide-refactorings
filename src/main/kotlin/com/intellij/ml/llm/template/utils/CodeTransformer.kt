@@ -27,8 +27,8 @@ class CodeTransformer(val extractFunctionType: MethodExtractionType = MethodExtr
             applicationResult = EFApplicationResult.FAIL
             reason = "invalid extract function candidate"
         } else {
-            editor.selectionModel.setSelection(efCandidate.offsetStart, efCandidate.offsetEnd)
             try {
+                editor.selectionModel.setSelection(efCandidate.offsetStart, efCandidate.offsetEnd)
                 invokeExtractFunction(efCandidate.functionName, project, editor, file)
             } catch (e: Exception) {
                 applicationResult = EFApplicationResult.FAIL
@@ -57,7 +57,7 @@ class CodeTransformer(val extractFunctionType: MethodExtractionType = MethodExtr
         when (file?.language) {
             JavaLanguage.INSTANCE -> {
                 MyMethodExtractor.invokeOnElements(
-                    project, editor, file, findSelectedPsiElements(editor, file), FunctionNameProvider(newFunctionName), extractFunctionType
+                    project, editor, file, findSelectedPsiElements(editor, file), functionNameProvider, extractFunctionType
                 )
             }
 

@@ -86,7 +86,9 @@ class UtilsTest : LightPlatformCodeInsightTestCase() {
         val efLLMRequestProvider: LLMRequestProvider =
             ExtractFunctionLLMRequestProvider("text-davinci-003", "text-davinci-edit-001", "gpt-3.5-turbo", mockReply)
         val llmResponse = sendChatRequest(
-            project, emptyList(), efLLMRequestProvider.chatModel, efLLMRequestProvider
+            project = project,
+            messages = emptyList(),
+            model = efLLMRequestProvider.chatModel
         )
 
         val llmSuggestions = llmResponse?.getSuggestions()

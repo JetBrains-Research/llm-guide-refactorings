@@ -22,8 +22,28 @@ class EFCandidateFactory {
             return candidates
         }
 
-        buildCandidateAsIs(efSuggestion, editor, file)?.let { candidates.add(it) }
-        buildCandidateWithAdjustment(efSuggestion, editor, file)?.let { candidates.add(it) }
+        val asIsCandidate = buildCandidateAsIs(efSuggestion, editor, file)
+        val adjustedCandidate = buildCandidateWithAdjustment(efSuggestion, editor, file)
+
+        if (canAddCandidate(asIsCandidate, file)) {
+            if (adjustedCandidate == null || !canAddCandidate(adjustedCandidate, file) || adjustedCandidate.heuristic.isEmpty()) {
+                candidates.add(asIsCandidate!!)
+            }
+        }
+        if (canAddCandidate(adjustedCandidate, file)) {
+            candidates.add(adjustedCandidate!!)
+        }
+
+//        if (adjustedCandidate != null && adjustedCandidate.heuristic.isNotEmpty()) {
+//            adjustedCandidate.let { candidates.add(it) }
+//        }
+//        else {
+//            asIsCandidate?.let { candidates.add(it) }
+//            adjustedCandidate?.let { candidates.add(it) }
+//        }
+
+//        buildCandidateAsIs(efSuggestion, editor, file)?.let { candidates.add(it) }
+//        buildCandidateWithAdjustment(efSuggestion, editor, file)?.let { candidates.add(it) }
 
         return candidates
     }
@@ -31,8 +51,9 @@ class EFCandidateFactory {
     fun buildCandidates(efSuggestions: List<EFSuggestion>, editor: Editor, file: PsiFile): List<EFCandidate> {
         val candidates = mutableListOf<EFCandidate>()
         efSuggestions.forEach { candidates.addAll(buildCandidates(it, editor, file)) }
-        var resultCandidates = EFCandidateUtils.computePopularity(candidates)
-        resultCandidates = EFCandidateUtils.computeHeat(resultCandidates)
+        val resultCandidates = candidates
+//        var resultCandidates = EFCandidateUtils.computePopularity(candidates)
+//        resultCandidates = EFCandidateUtils.computeHeat(resultCandidates)
         return resultCandidates
     }
 
@@ -97,6 +118,17 @@ class EFCandidateFactory {
         return resultCandidate
     }
 
+    private fun canAddCandidate(candidate: EFCandidate?, file: PsiFile) : Boolean {
+        if (candidate == null) return false
+        if (EFSettings.instance.has(EFSettingType.VERY_LARGE_BLOCK_HEURISTIC)) {
+            val hostFunction = PsiUtils.getParentFunctionOrNull(candidate.offsetStart, file)
+            if (EFCandidateUtils.candidateSizeIsAboveThreshold(candidate, hostFunction) || EFCandidateUtils.candidateSizeIsBelowThreshold(candidate, hostFunction)) {
+                return false
+            }
+        }
+        return true
+    }
+
     /**
      * This is a heuristic to prefer the inner body of an IF statement as opposed to the entire IF statement
      * Example:
@@ -140,10 +172,11 @@ class EFCandidateFactory {
                 offsetStart = newOffsetStart,
                 offsetEnd = newOffsetEnd,
                 lineStart = newLineStart,
-                lineEnd = newLineEnd
+                lineEnd = newLineEnd,
             ).also {
                 it.efSuggestion = candidate.efSuggestion
                 it.type = candidate.type
+                it.heuristic = "IF_BLOCK"
             }
             return newCandidate
         }
@@ -171,6 +204,7 @@ class EFCandidateFactory {
             ).also {
                 it.type = candidate.type
                 it.efSuggestion = candidate.efSuggestion
+                it.heuristic = "PREV_STATEMENT"
             }
             return newCandidate
         }

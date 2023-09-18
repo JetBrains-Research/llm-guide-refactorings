@@ -41,7 +41,7 @@ fun replaceGithubUrlLineRange(githubUrl: String, lineStart: Int, lineEnd: Int): 
 
 fun readCodeSnippet(filename: String, lineStart: Int, lineEnd: Int): String {
     val lines = File(filename).readLines()
-    return lines.subList(lineStart, lineEnd + 1).joinToString(separator = "\n")
+    return lines.subList(lineStart-1, lineEnd).joinToString(separator = "\n")
 }
 
 /**
@@ -271,7 +271,7 @@ private fun selectionIsEntireBodyFunctionJava(efCandidate: EFCandidate, file: Ps
     val end = file.findElementAt(efCandidate.offsetEnd)
 
     val parentBlock = PsiUtils.getParentFunctionBlockOrNull(start, JavaLanguage.INSTANCE)
-        ?: PsiUtils.getParentFunctionBlockOrNull(end, JavaLanguage.INSTANCE)
+        ?: PsiUtils.getParentFunctionBlockOrNull(end, JavaLanguage.INSTANCE) ?: return false
     val statements = (parentBlock as PsiCodeBlock).statements
 
     if (statements.isEmpty()) {
@@ -287,6 +287,15 @@ fun removeDuplicates(candidates: List<EFCandidate>): List<EFCandidate> {
     return uniqueCandidates
 }
 
+fun extractLinesFromGithubUrl(url: String): Pair<Int, Int> {
+    val pattern = "#L(\\d+)-L(\\d+)".toRegex()
+    val matchResult = pattern.find(url)
+
+    return matchResult?.let { match ->
+        val (num1, num2) = match.destructured
+        Pair(num1.toInt(), num2.toInt())
+    }!!
+}
 
 class PsiUtils {
     companion object {
@@ -430,6 +439,8 @@ class PsiUtils {
                     if (variableNames.contains(ref.referenceName)) {
                         return true
                     }
+                    val identifiers = PsiTreeUtil.findChildrenOfType(ref, PsiIdentifier::class.java).map { it.text }
+                    if (identifiers.intersect(variableNames).isNotEmpty()) return true
                 }
             }
             return false
@@ -465,6 +476,30 @@ class PsiUtils {
             val varName = (lexpression as PsiReferenceExpression).referenceName ?: ""
 
             return varName
+        }
+
+        fun countLinesInMethodBody(method: PsiElement): Int {
+            when (method) {
+                is PsiMethod -> {
+                    val methodBody: PsiCodeBlock? = method.body
+                    if (methodBody != null) {
+                        val statements = PsiTreeUtil.getChildrenOfType(methodBody, PsiStatement::class.java)
+                        if (statements == null || statements.isEmpty()) return 0
+                        val lineStart = statements.first().getLineNumber(true)
+                        val lineEnd = statements.last().getLineNumber(false)
+                        return lineEnd - lineStart + 1
+                    }
+                }
+                is KtNamedFunction -> {
+                    val functionBody: KtBlockExpression? = method.bodyExpression as? KtBlockExpression
+                    if (functionBody != null) {
+                        val functionText = functionBody.text
+                        val lines = functionText.split('\n')
+                        return lines.size
+                    }
+                }
+            }
+            return 0
         }
     }
 }

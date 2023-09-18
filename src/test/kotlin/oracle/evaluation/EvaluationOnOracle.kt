@@ -12,10 +12,16 @@ import com.intellij.openapi.util.registry.Registry
 import com.intellij.testFramework.LightPlatformCodeInsightTestCase
 import com.mongodb.client.model.Filters
 import org.bson.Document
+import org.eclipse.jgit.api.Git
+import org.eclipse.jgit.lib.RepositoryBuilder
+import utilities.*
+import java.io.File
+
 
 data class EvaluationOnOracleProcessorArgs(
-    val db: String,
-    val updateDocs: Boolean
+    val repoArgs: RepoArgs,
+    val mongoArgs: MongoArgs,
+    val llmArgs: LLMArgs,
 )
 
 class EvaluationOnOracleProcessor(val mongoManager: MongoManager, val args: EvaluationOnOracleProcessorArgs) :
@@ -23,6 +29,8 @@ class EvaluationOnOracleProcessor(val mongoManager: MongoManager, val args: Eval
 
     private val efLLMRequestProvider: LLMRequestProvider = GPTExtractFunctionRequestProvider
     private val projectPath = ""
+    private var git: Git? = null
+    private val tempDownloadPath = "your/path/to/download/tmp/files"
 
     override fun getTestDataPath(): String {
         return projectPath
@@ -30,64 +38,78 @@ class EvaluationOnOracleProcessor(val mongoManager: MongoManager, val args: Eval
 
     init {
         Registry.get("llm.for.code.enable.mock.requests").setValue(false) // or another value type
+        when (args.repoArgs.repoType) {
+            RepoType.LOCAL_GIT_CLONE -> {
+                val repository = RepositoryBuilder().setGitDir(File("${args.repoArgs.repoPath}/.git")).build()
+                git = Git(repository)
+            }
+
+            else -> {}
+        }
     }
 
     fun process() {
-//        val filter = Filters.eq("_id", org.bson.types.ObjectId("64dc0bd154151567a94bf6c0"))
-//        val filter = Filters.eq("_id", org.bson.types.ObjectId("64dc0bd154151567a94bf6be"))
-        val filter = Filters.and(
-            Filters.gt("oracle.loc", 1),
-            Document(
-                "\$expr",
-                Document(
-                    "\$gt", listOf("\$oracle.hf_body_loc", "\$oracle.loc")
-                )
-            )
-        )
-
-        val limit = 0
-        val docs = mongoManager.collection.find(filter).limit(limit)
-        val maxShots = 5
+        val docs = mongoManager.collection.find(args.mongoArgs.mongoFilter).limit(args.mongoArgs.mongoDocsFetchLimit)
+        val maxShots = args.llmArgs.maxShots
+        val temperatureKey = "temperature_${args.llmArgs.temperature}"
 
         docs.forEach { doc ->
             val docId = doc["_id"]
             println("processing document: ${docId.toString()}")
 
-            val githubUrl = (doc.get("host_function_before_ef") as Document).getString("url")
-
-            val oracleDoc = doc.get("oracle") as Document
-            val filename = oracleDoc.getString("filename")
-            val lineStart = oracleDoc.getInteger("line_start")
-            val lineEnd = oracleDoc.getInteger("line_end")
+            val oracle = MongoCandidateAdapter.mongo2Oracle(doc)
+            val oracleHfLineStart = oracle.hostFunctionData.lineStart
+            val oracleHfLineEnd = oracle.hostFunctionData.lineEnd
+            val githubUrl = oracle.hostFunctionData.githubUrl
+            val commitHash = doc.getString("sha_before_ef") ?: ""
 
             // configure project
+            val filename = configureLocalFile(args.repoArgs, oracle, commitHash, git, tempDownloadPath)
+            if (filename.isEmpty()) {
+                println("could not create filename")
+                return@forEach
+            }
             configureByFile(filename)
 
-            var codeSnippet = readCodeSnippet(filename, lineStart, lineEnd)
-            codeSnippet = addLineNumbersToCodeSnippet(codeSnippet, lineStart)
+            val llmDataKey =
+                if (EFSettings.instance.has(EFSettingType.MULTISHOT_LEARNING)) "llm_multishot_data" else "llm_singleshot_data"
+
+            var codeSnippet = readCodeSnippet(filename, oracleHfLineStart, oracleHfLineEnd)
+            codeSnippet = addLineNumbersToCodeSnippet(codeSnippet, oracleHfLineStart)
 
             val multishotProducer = MultiShotCandidateProducer(project, editor, file)
             val multishotSender = MultishotSender(efLLMRequestProvider, project)
 
-            var llmMultishotResponseDataList = emptyList<LlmMultishotResponseData>()
-            if (doc.containsKey("llm_multishot_data")) {
-                val lst = doc.getList("llm_multishot_data", Document::class.java)
-                llmMultishotResponseDataList = MongoCandidateAdapter.mongo2LLMMultishotResponseData(lst)
-            } else {
-                llmMultishotResponseDataList = multishotSender.sendRequest(codeSnippet, maxShots)
-                val llmMultishotDataDoc =
-                    MongoCandidateAdapter.llmMultishotResponseData2Mongo(llmMultishotResponseDataList)
-                doc.append("llm_multishot_data", llmMultishotDataDoc)
+            val llmResponseDataList = mutableListOf<LlmMultishotResponseData>()
+            if (doc.containsKey(llmDataKey)) {
+                val multishotDataDoc = doc.get(llmDataKey) as Document
+                val lst = multishotDataDoc.getList(temperatureKey, Document::class.java) ?: emptyList()
+                llmResponseDataList.addAll(MongoCandidateAdapter.mongo2LLMMultishotResponseData(lst))
             }
 
-            val multishotCandidates = multishotProducer.buildMultishotCandidates(llmMultishotResponseDataList)
+            // add missing shots
+            llmResponseDataList.addAll(
+                multishotSender.sendRequest(
+                    data = codeSnippet,
+                    existingShots = llmResponseDataList.map { it.shotNo },
+                    maxShots = maxShots
+                )
+            )
+
+            val llmDataArrayDoc = MongoCandidateAdapter.llmMultishotResponseData2Mongo(llmResponseDataList)
+            val llmDataDoc = (doc.get(llmDataKey) ?: Document()) as Document
+            llmDataDoc.append(temperatureKey, llmDataArrayDoc)
+            doc.append(llmDataKey, llmDataDoc)
+
+            val multishotCandidates = multishotProducer.buildMultishotCandidates(llmResponseDataList)
             val candidates = multishotCandidates.flatMap { it.efCandidates }.toList()
-            val llmProcessingTime = llmMultishotResponseDataList.sumOf { it.processingTime }
+            val llmProcessingTime = llmResponseDataList.sumOf { it.processingTime }
             val jetGptProcessingTime = multishotCandidates.sumOf { it.jetGPTProcessingTime }
 
             val rankedByPopularity = EFCandidateUtils.rankByPopularity(candidates)
-            val rankedByHeat = EFCandidateUtils.rankByHeat(candidates)
+            val rankedByHeat = EFCandidateUtils.rankByHeat(candidates, oracle.hostFunctionData)
             val rankedBySize = EFCandidateUtils.rankBySize(candidates)
+            val rankedByOverlap = EFCandidateUtils.rankByOverlap(candidates)
 
             var rankedByPopularityDoc =
                 MongoCandidateAdapter.adaptRankedCandidateList(rankedByPopularity, multishotCandidates)
@@ -96,11 +118,14 @@ class EvaluationOnOracleProcessor(val mongoManager: MongoManager, val args: Eval
             rankedByHeatDoc = MongoCandidateAdapter.enrichWithGithubUrl(rankedByHeatDoc, githubUrl)
             var rankedBySizeDoc = MongoCandidateAdapter.adaptRankedCandidateList(rankedBySize, multishotCandidates)
             rankedBySizeDoc = MongoCandidateAdapter.enrichWithGithubUrl(rankedBySizeDoc, githubUrl)
+            var rankedByOverlapDoc = MongoCandidateAdapter.adaptRankedCandidateList(rankedByOverlap, multishotCandidates)
+            rankedByOverlapDoc = MongoCandidateAdapter.enrichWithGithubUrl(rankedByOverlapDoc, githubUrl)
 
-            val jetgptRankingDoc = Document()
+            val rankingDoc = Document()
                 .append("rank_by_size", rankedBySizeDoc)
                 .append("rank_by_popularity", rankedByPopularityDoc)
-                .append("ranked_by_heat", rankedByHeatDoc)
+                .append("rank_by_heat", rankedByHeatDoc)
+                .append("rank_by_overlap", rankedByOverlapDoc)
                 .append(
                     "processing_time",
                     Document()
@@ -108,29 +133,143 @@ class EvaluationOnOracleProcessor(val mongoManager: MongoManager, val args: Eval
                         .append("jetgpt_processing_time", jetGptProcessingTime)
                         .append("total_processing_time", llmProcessingTime + jetGptProcessingTime)
                 )
+            val shotTypeKey = buildShotKey()
+            val jetgptRankingDoc = (doc.get("jetgpt_ranking") ?: Document()) as Document
+            val shotTypeDoc = (jetgptRankingDoc.get(shotTypeKey) ?: Document()) as Document
+            shotTypeDoc.append(temperatureKey, rankingDoc)
+            jetgptRankingDoc.append(shotTypeKey, shotTypeDoc)
             doc.append("jetgpt_ranking", jetgptRankingDoc)
 
-            if (args.updateDocs) {
+            if (args.mongoArgs.updateDocs) {
                 println("updating document: ${docId}")
                 mongoManager.collection.updateOne(Filters.eq("_id", doc["_id"]), Document("\$set", doc))
             }
+
+            rollbackLocalFile(filename, args.repoArgs, git)
         }
 
         mongoManager.close()
+    }
+
+
+
+    private fun buildShotKey(): String {
+        return if (EFSettings.instance.has(EFSettingType.MULTISHOT_LEARNING)) "multishot" else "singleshot"
     }
 }
 
 class TestEvaluationOnOracleProcessor : LightPlatformCodeInsightTestCase() {
     fun `test EvaluationOnOracleProcessor`() {
-        val args = EvaluationOnOracleProcessorArgs(
-            db = "ef_evaluation/revisited_xu_dataset",
-//            repoPath = "/Users/dpomian/hardwork/research/jetbrains/extract_method_firehouse/githubclones/JetBrains/intellij-community",
-//            repoBranch = "master",
-            updateDocs = true
+        val xuDatasetArgs = EvaluationOnOracleProcessorArgs(
+            repoArgs = RepoArgs(
+                repoPath = "",
+                repoBranch = "",
+                repoType = RepoType.LOCAL_FILE
+            ),
+            mongoArgs = MongoArgs(
+                db = "dbName/collectionName",
+                updateDocs = true,
+                mongoDocsFetchLimit = 0,
+//            mongoFilter = Filters.eq("_id", org.bson.types.ObjectId("64dc0ba2708d3e16a01d0fc4"))
+                mongoFilter = Filters.and(
+                    Filters.gt("oracle.loc", 1),
+                    Document(
+                        "\$expr",
+                        Document(
+                            "\$gt", listOf("\$oracle.hf_body_loc", "\$oracle.loc")
+                        )
+                    )
+                )
+            ),
+            llmArgs = LLMArgs(
+                maxShots = 5,
+                temperature = 1.0,
+            )
         )
+
+        val ijceDatasetArgs = EvaluationOnOracleProcessorArgs(
+            repoArgs = RepoArgs(
+                repoType = RepoType.ONLINE_GITHUB,
+            ),
+            mongoArgs = MongoArgs(
+                db = "playground_refminer/ijce",
+                updateDocs = true,
+                mongoDocsFetchLimit = 0,
+                mongoFilter = Filters.and(
+                    Filters.gt("oracle.loc", 1),
+                    Document(
+                        "\$expr",
+                        Document(
+                            "\$gt", listOf("\$oracle.hf_body_loc", "\$oracle.loc")
+                        )
+                    )
+                )
+            ),
+            llmArgs = LLMArgs(
+                maxShots = 5,
+                temperature = 1.0,
+            ),
+        )
+
+        val silvaDatasetArgs = EvaluationOnOracleProcessorArgs(
+            repoArgs = RepoArgs(
+                repoType = RepoType.ONLINE_GITHUB,
+            ),
+            mongoArgs = MongoArgs(
+                db = "dbName/collectionName",
+                updateDocs = true,
+                mongoDocsFetchLimit = 0,
+                mongoFilter = Filters.and(
+                    Filters.gt("oracle.loc", 1),
+                    Filters.ne("oracle.manually_marked", true),
+                    Document(
+                        "\$expr",
+                        Document(
+                            "\$gt", listOf("\$oracle.hf_body_loc", "\$oracle.loc")
+                        )
+                    )
+                )
+            ),
+            llmArgs = LLMArgs(
+                temperature = 1.0,
+                maxShots = 5,
+            ),
+        )
+
+        val corenlpArgs = EvaluationOnOracleProcessorArgs(
+            repoArgs = RepoArgs(
+                repoType = RepoType.ONLINE_GITHUB,
+            ),
+            mongoArgs = MongoArgs(
+                db = "dbName/collectionName",
+                updateDocs = true,
+                mongoDocsFetchLimit = 0,
+                mongoFilter = Filters.and(
+                    Filters.gt("oracle.loc", 1),
+                    Filters.ne("oracle.manually_marked", true),
+                    Document(
+                        "\$expr",
+                        Document(
+                            "\$gt", listOf("\$oracle.hf_body_loc", "\$oracle.loc")
+                        )
+                    )
+                )
+            ),
+            llmArgs = LLMArgs(
+                temperature = 1.0,
+                maxShots = 5,
+            ),
+        )
+
         EFSettings.instance
             .add(EFSettingType.IF_BLOCK_HEURISTIC)
-//            .add(EFSettingType.PREV_ASSIGNMENT_HEURISTIC)
-        EvaluationOnOracleProcessor(MongoManager.FromConnectionString(args.db), args).process()
+            .add(EFSettingType.PREV_ASSIGNMENT_HEURISTIC)
+            .add(EFSettingType.MULTISHOT_LEARNING)
+            .add(EFSettingType.VERY_LARGE_BLOCK_HEURISTIC)
+
+//        EvaluationOnOracleProcessor(MongoManager.FromConnectionString(xuDatasetArgs.mongoArgs.db), xuDatasetArgs).process()
+//        EvaluationOnOracleProcessor(MongoManager.FromConnectionString(ijceDatasetArgs.mongoArgs.db), ijceDatasetArgs).process()
+//        EvaluationOnOracleProcessor(MongoManager.FromConnectionString(silvaDatasetArgs.mongoArgs.db), silvaDatasetArgs).process()
+        EvaluationOnOracleProcessor(MongoManager.FromConnectionString(corenlpArgs.mongoArgs.db), corenlpArgs).process()
     }
 }

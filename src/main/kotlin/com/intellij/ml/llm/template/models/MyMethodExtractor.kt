@@ -92,13 +92,16 @@ class MyMethodExtractor(private val functionNameProvider: FunctionNameProvider? 
                 computeWithAnalyzeProgress<List<ExtractOptions>, ExtractException>(file.project) {
                     findAllOptionsToExtract(elements)
                 }
-            val filteredOptionsToExtract = if (extractFunctionType == MethodExtractionType.PARENT_CLASS) {
-                allOptionsToExtract.filter { option ->
-                    option.anchor !is PsiClass
+
+            var filteredOptionsToExtract = allOptionsToExtract
+
+            if (extractFunctionType == MethodExtractionType.PARENT_CLASS) {
+                filteredOptionsToExtract = filteredOptionsToExtract.filter { it.anchor !is PsiClass }
+                if (filteredOptionsToExtract.size > 1) {
+                    filteredOptionsToExtract = filteredOptionsToExtract.subList(0, 1)
                 }
-            } else {
-                allOptionsToExtract
             }
+
             return selectOptionWithTargetClass(editor, filteredOptionsToExtract)
         } catch (e: ExtractException) {
             val message = JavaRefactoringBundle.message("extract.method.error.prefix") + " " + (e.message ?: "")
@@ -146,7 +149,7 @@ class MyMethodExtractor(private val functionNameProvider: FunctionNameProvider? 
     private fun suggestSafeMethodNames(options: ExtractOptions): List<String> {
         var unsafeNames = guessMethodName(options)
         if (functionNameProvider != null) {
-            unsafeNames = listOf(functionNameProvider.getFunctionName().name) + unsafeNames
+            unsafeNames = listOf(functionNameProvider.getFunctionName().name).filter { it.isNotEmpty() } + unsafeNames
         }
         val safeNames = unsafeNames.filterNot { name -> hasConflicts(options.copy(methodName = name)) }
         if (safeNames.isNotEmpty()) return safeNames

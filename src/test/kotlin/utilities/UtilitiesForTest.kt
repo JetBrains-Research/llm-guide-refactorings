@@ -1,5 +1,6 @@
-package evaluation
+package utilities
 
+import com.intellij.ml.llm.template.evaluation.OracleData
 import com.intellij.ml.llm.template.extractfunction.EFCandidate
 import com.intellij.ml.llm.template.extractfunction.MethodExtractionType
 import com.intellij.ml.llm.template.utils.CodeTransformer
@@ -18,7 +19,10 @@ import com.mongodb.client.model.Filters
 import org.bson.Document
 import org.bson.conversions.Bson
 import org.bson.types.ObjectId
+import org.eclipse.jgit.api.Git
+import org.eclipse.jgit.api.ResetCommand
 import java.io.BufferedReader
+import java.io.File
 import java.io.InputStreamReader
 
 internal fun fetchDocuments(
@@ -74,8 +78,8 @@ internal fun downloadGithubFile(
     outputFile: String
 ): Int {
     val pythonScriptPath =
-        "/Users/dpomian/hardwork/research/extract_function_research/tools/evaluation/evaluator/github_cli.py"
-    val virtualEnvPath = "/Users/dpomian/.venvs/ef_research"
+        "python/script/path/to/download/github/file"
+    val virtualEnvPath = "virtual/environment/path"
     val command = mutableListOf("$virtualEnvPath/bin/python", pythonScriptPath)
     command.add("dl")
     command.add("-repo-info")
@@ -193,4 +197,67 @@ internal fun rankMongoCandidatesByHeat(candidates: List<Document>): List<Documen
 internal fun removeCandidatesDuplicates(candidates: List<Document>): List<Document> {
     val uniqueCandidates = candidates.distinctBy { it.getInteger("line_start") to it.getInteger("line_end") }
     return uniqueCandidates
+}
+
+internal fun configureLocalFile(
+    repoArgs: RepoArgs,
+    oracle: OracleData,
+    commitHash: String,
+    git: Git?,
+    tempDownloadPath: String
+): String {
+    var filename = ""
+    when (repoArgs.repoType) {
+        RepoType.LOCAL_GIT_CLONE -> {
+            val oracleFilename = oracle.filename
+            filename = "${repoArgs.repoPath}/${oracleFilename}"
+            if (git != null) {
+                switchToBranch(git, repoArgs.repoBranch)
+                // checkout repo to commit hash
+                git.checkout().setName(commitHash).call()
+            }
+        }
+
+        RepoType.LOCAL_FILE -> filename = oracle.filename
+        RepoType.ONLINE_GITHUB -> {
+            var hfUrl = oracle.hostFunctionData.githubUrl
+            hfUrl = hfUrl.replace("https://github.com/", "")
+            hfUrl = hfUrl.replace(Regex("#L\\d+-L\\d+"), "")
+            val tokens = hfUrl.split("/")
+            val repoOwner = tokens[0]
+            val repoName = tokens[1]
+            val repoFilePath = oracle.filename
+            val githubToken = ""
+            filename = "$tempDownloadPath/${tokens.last()}"
+            if (downloadGithubFile(repoOwner, repoName, repoFilePath, githubToken, commitHash, filename) != 0) {
+                filename = ""
+            }
+        }
+    }
+
+    return filename
+}
+
+internal fun rollbackLocalFile(filename: String, repoArgs: RepoArgs, git: Git?) {
+    when (repoArgs.repoType) {
+        RepoType.LOCAL_GIT_CLONE -> {
+            if (git != null) {
+                switchToBranch(git, repoArgs.repoBranch)
+            }
+        }
+
+        RepoType.ONLINE_GITHUB -> {
+            val file = File(filename)
+            if (file.exists()) {
+                file.delete()
+            }
+        }
+
+        else -> {}
+    }
+}
+
+private fun switchToBranch(git: Git, branchName: String) {
+    git.checkout().setForced(true).setName(branchName).call()
+    git.reset().setMode(ResetCommand.ResetType.HARD).call()
 }

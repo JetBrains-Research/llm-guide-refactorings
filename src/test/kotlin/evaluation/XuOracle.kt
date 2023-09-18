@@ -9,6 +9,8 @@ import com.mongodb.client.MongoClient
 import com.mongodb.client.MongoClients
 import com.mongodb.client.model.Filters
 import org.bson.Document
+import utilities.fetchDocuments
+import utilities.getExtractedCodeSnippet
 
 class XuOracle : LightPlatformCodeInsightTestCase() {
     private var mongoClient: MongoClient = MongoClients.create("mongodb://localhost:27017")

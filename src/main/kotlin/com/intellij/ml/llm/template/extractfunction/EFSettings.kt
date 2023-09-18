@@ -2,7 +2,9 @@ package com.intellij.ml.llm.template.extractfunction
 
 enum class EFSettingType(s: String) {
     IF_BLOCK_HEURISTIC("DIALOG"),
-    PREV_ASSIGNMENT_HEURISTIC("PARENT_CLASS")
+    PREV_ASSIGNMENT_HEURISTIC("PARENT_CLASS"),
+    VERY_LARGE_BLOCK_HEURISTIC("VERY_LARGE_BLOCK"),
+    MULTISHOT_LEARNING("MULTISHOT_LEARNING")
 }
 
 class EFSettings {

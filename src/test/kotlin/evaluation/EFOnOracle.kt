@@ -20,6 +20,7 @@ import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.api.ResetCommand
 import org.eclipse.jgit.lib.RepositoryBuilder
 import org.jetbrains.kotlin.utils.addToStdlib.sumByLong
+import utilities.*
 import java.io.File
 
 
@@ -78,7 +79,7 @@ class EFOnOracle : LightPlatformCodeInsightTestCase() {
         val dbName = "playground_refminer"
         val collectionName = "ijce"
         val limit = 25
-        val repositoryPath = "/Users/dpomian/hardwork/research/jetbrains/intellij-community"
+        val repositoryPath = "path/to/repository"
         val branchName = "master"
         val mongoCollection = mongoClient.getDatabase(dbName).getCollection(collectionName)
         val filters = Filters.and(
@@ -148,10 +149,10 @@ class EFOnOracle : LightPlatformCodeInsightTestCase() {
             val githubUrl = (doc.get("host_function_before_ef") as Document).getString("url")
             val (lineStart, lineEnd) = extractLinesFromGithubUrl(githubUrl)
 
-            val githubToken = "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"
+            val githubToken = "your_github_token"
             val outputFileName = repoFilePath.split("/").last()
             val outputFile =
-                "/Users/dpomian/hardwork/research/jetbrains/llm-guide-refactorings/src/test/testdata/$outputFileName"
+                "path/to/output/file/$outputFileName"
             val returnCode = downloadGithubFile(
                 repoOwner = repoOwner,
                 repoName = repoName,

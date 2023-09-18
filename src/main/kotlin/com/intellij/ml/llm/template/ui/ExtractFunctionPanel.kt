@@ -187,8 +187,8 @@ class ExtractFunctionPanel(
         val methodSignaturePreview =
             MethodSignatureComponent("", myProject, com.intellij.ide.highlighter.JavaFileType.INSTANCE)
         methodSignaturePreview.isFocusable = false
-        methodSignaturePreview.minimumSize = Dimension(500, 200)
-        methodSignaturePreview.preferredSize = Dimension(500, 200)
+        methodSignaturePreview.minimumSize = Dimension(500, 120)
+        methodSignaturePreview.preferredSize = Dimension(500, 150)
         methodSignaturePreview.maximumSize = Dimension(500, 200)
 
         return methodSignaturePreview
@@ -203,7 +203,7 @@ class ExtractFunctionPanel(
             row {
                 cell(myMethodSignaturePreview)
                     .align(AlignX.FILL)
-                    .applyToComponent { minimumSize = JBDimension(100, 100) }
+                    .applyToComponent { minimumSize = JBDimension(100, 120) }
             }
 
             row {
@@ -215,6 +215,9 @@ class ExtractFunctionPanel(
                         KeymapUtil.getFirstKeyboardShortcutText(ActionManager.getInstance().getAction("ExtractMethod"))
                     )
                 )
+                button("Exit", actionListener = {
+                    myPopup?.cancel()
+                })
             }
         }
         popupPanel.preferredFocusedComponent = myExtractFunctionsCandidateTable
@@ -228,6 +231,12 @@ class ExtractFunctionPanel(
     private fun generateFunctionSignature(psiMethod: PsiMethod): String {
         val builder = StringBuilder()
 
+        // Add the return type if it's not a constructor
+        if (!psiMethod.isConstructor) {
+//            builder.append(psiMethod.returnType?.canonicalText ?: "void")
+            builder.append("${psiMethod.returnType?.presentableText ?: "void"} ")
+        }
+
         // Add the method name
         builder.append(psiMethod.name)
 
@@ -239,10 +248,6 @@ class ExtractFunctionPanel(
         ) { "${it.type.presentableText} ${it.name}" }
         builder.append(")")
 
-        // Add the return type if it's not a constructor
-        if (!psiMethod.isConstructor) {
-            builder.append(": ${psiMethod.returnType?.presentableText ?: "Unit"}")
-        }
 
         // Add function body
         builder.append(" {\n\t...\n}")
@@ -258,7 +263,7 @@ class ExtractFunctionPanel(
                     myEditor,
                     myFile,
                     TextRange(efCandidate.offsetStart, efCandidate.offsetEnd),
-                    MethodExtractionType.DIALOG
+                    MethodExtractionType.PARENT_CLASS
                 )?.thenApply { options ->
                     val elementsToReplace = MethodExtractor().prepareRefactoringElements(options)
                     elementsToReplace.method.setName(efCandidate.functionName)

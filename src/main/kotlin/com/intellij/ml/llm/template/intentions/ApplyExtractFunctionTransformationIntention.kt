@@ -3,12 +3,16 @@ package com.intellij.ml.llm.template.intentions
 import com.intellij.codeInsight.intention.IntentionAction
 import com.intellij.codeInsight.unwrap.ScopeHighlighter
 import com.intellij.ml.llm.template.LLMBundle
+import com.intellij.ml.llm.template.evaluation.HostFunctionData
 import com.intellij.ml.llm.template.extractfunction.EFCandidate
+import com.intellij.ml.llm.template.extractfunction.EFSettingType
+import com.intellij.ml.llm.template.extractfunction.EFSettings
+import com.intellij.ml.llm.template.extractfunction.EFSuggestion
 import com.intellij.ml.llm.template.models.GPTExtractFunctionRequestProvider
-import com.intellij.ml.llm.template.models.LLMBaseResponse
 import com.intellij.ml.llm.template.models.LLMRequestProvider
-import com.intellij.ml.llm.template.models.sendChatRequest
-import com.intellij.ml.llm.template.prompts.fewShotExtractSuggestion
+import com.intellij.ml.llm.template.models.LlmMultishotResponseData
+import com.intellij.ml.llm.template.models.MultishotSender
+import com.intellij.ml.llm.template.prompts.multishotExtractFunctionPrompt
 import com.intellij.ml.llm.template.telemetry.*
 import com.intellij.ml.llm.template.ui.ExtractFunctionPanel
 import com.intellij.ml.llm.template.utils.*
@@ -41,10 +45,16 @@ abstract class ApplyExtractFunctionTransformationIntention(
     private val codeTransformer = CodeTransformer()
     private val telemetryDataManager = EFTelemetryDataManager()
     private var llmResponseTime = 0L
+    private var hostFunctionData = HostFunctionData(-1, -1, -1)
 
     init {
         codeTransformer.addObserver(EFLoggerObserver(logger))
         codeTransformer.addObserver(TelemetryDataObserver())
+        EFSettings.instance
+            .add(EFSettingType.IF_BLOCK_HEURISTIC)
+            .add(EFSettingType.MULTISHOT_LEARNING)
+            .add(EFSettingType.PREV_ASSIGNMENT_HEURISTIC)
+            .add(EFSettingType.VERY_LARGE_BLOCK_HEURISTIC)
     }
 
     override fun getFamilyName(): String = LLMBundle.message("intentions.apply.transformation.family.name")
@@ -66,6 +76,8 @@ abstract class ApplyExtractFunctionTransformationIntention(
             val startLineNumber = editor.document.getLineNumber(selectionModel.selectionStart) + 1
             val withLineNumbers = addLineNumbersToCodeSnippet(codeSnippet, startLineNumber)
 
+            hostFunctionData = HostFunctionData(startLineNumber, startLineNumber + codeSnippet.lines().size - 1, 0)
+
             telemetryDataManager.addHostFunctionTelemetryData(
                 EFTelemetryDataUtils.buildHostFunctionTelemetryData(
                     codeSnippet = codeSnippet,
@@ -81,30 +93,46 @@ abstract class ApplyExtractFunctionTransformationIntention(
 
     private fun invokeLlm(text: String, project: Project, editor: Editor, file: PsiFile) {
         logger.info("Invoking LLM with text: $text")
-        val messageList = fewShotExtractSuggestion(text)
+        val messageList = multishotExtractFunctionPrompt(text)
 
         val task = object : Task.Backgroundable(
             project, LLMBundle.message("intentions.request.extract.function.background.process.title")
         ) {
             override fun run(indicator: ProgressIndicator) {
                 val now = System.nanoTime()
-                val response = sendChatRequest(
-                    project, messageList, efLLMRequestProvider.chatModel, efLLMRequestProvider
-                )
-                if (response != null) {
+                val responseList = MultishotSender(efLLMRequestProvider, project).sendRequest(text, emptyList(), 5, 1.0)
+                if (responseList.isNotEmpty()) {
                     invokeLater {
-                        llmResponseTime = System.nanoTime() - now
-                        if (response.getSuggestions().isEmpty()) {
-                            showEFNotification(
-                                project,
-                                LLMBundle.message("notification.extract.function.with.llm.no.suggestions.message"),
-                                NotificationType.INFORMATION
-                            )
-                        } else {
-                            processLLMResponse(response, project, editor, file)
-                        }
+                        llmResponseTime = responseList.sumOf { it.processingTime }
+                        processLLMResponse(responseList, project, editor, file)
                     }
                 }
+                else {
+                    showEFNotification(
+                        project,
+                        LLMBundle.message("notification.extract.function.with.llm.no.suggestions.message"),
+                        NotificationType.INFORMATION
+                    )
+                }
+//                val response = sendChatRequest(
+//                    project = project,
+//                    messages = messageList,
+//                    model = efLLMRequestProvider.chatModel
+//                )
+//                if (response != null) {
+//                    invokeLater {
+//                        llmResponseTime = System.nanoTime() - now
+//                        if (response.getSuggestions().isEmpty()) {
+//                            showEFNotification(
+//                                project,
+//                                LLMBundle.message("notification.extract.function.with.llm.no.suggestions.message"),
+//                                NotificationType.INFORMATION
+//                            )
+//                        } else {
+//                            processLLMResponse(response, project, editor, file)
+//                        }
+//                    }
+//                }
             }
         }
         ProgressManager.getInstance().runProcessWithProgressAsynchronously(task, BackgroundableProcessIndicator(task))
@@ -125,12 +153,17 @@ abstract class ApplyExtractFunctionTransformationIntention(
         return filteredCandidates
     }
 
-    private fun processLLMResponse(response: LLMBaseResponse, project: Project, editor: Editor, file: PsiFile) {
+    private fun processLLMResponse(llmResponseData: List<LlmMultishotResponseData>, project: Project, editor: Editor, file: PsiFile) {
         val now = System.nanoTime()
+        val efSuggestionList = mutableListOf<EFSuggestion>()
 
-        val llmResponse = response.getSuggestions()[0]
-        val efSuggestionList = identifyExtractFunctionSuggestions(llmResponse.text)
-        val builtCandidates = EFCandidateFactory().buildCandidates(efSuggestionList.suggestionList, editor, file).toList()
+        llmResponseData.filter { it.llmResponse != null }
+        llmResponseData.forEach {
+            efSuggestionList.addAll(identifyExtractFunctionSuggestions(it.llmResponse!!.getSuggestions()[0].text).suggestionList)
+        }
+
+        var builtCandidates = EFCandidateFactory().buildDistinctCandidates(efSuggestionList, editor, file).toList()
+        builtCandidates = EFCandidateUtils.rankByHeat(builtCandidates, hostFunctionData)
         val candidates = builtCandidates.distinct()
         if (candidates.isEmpty()) {
             showEFNotification(
@@ -147,7 +180,7 @@ abstract class ApplyExtractFunctionTransformationIntention(
 
             telemetryDataManager.addCandidatesTelemetryData(
                 buildCandidatesTelemetryData(
-                    efSuggestionList.suggestionList.size,
+                    efSuggestionList.size,
                     candidatesApplicationTelemetryObserver.getData()
                 )
             )
@@ -161,7 +194,8 @@ abstract class ApplyExtractFunctionTransformationIntention(
                 )
                 sendTelemetryData()
             } else {
-                showExtractFunctionPopup(project, editor, file, filteredCandidates, codeTransformer)
+                val top3Candidates = filteredCandidates.subList(0, minOf(3, filteredCandidates.size))
+                showExtractFunctionPopup(project, editor, file, top3Candidates, codeTransformer)
             }
         }
     }
@@ -194,6 +228,7 @@ abstract class ApplyExtractFunctionTransformationIntention(
                 .setRequestFocus(true)
                 .setTitle(LLMBundle.message("ef.candidates.popup.title"))
                 .setResizable(true)
+                .setCancelOnClickOutside(false)
                 .setMovable(true).createPopup()
 
         // Add onClosed listener

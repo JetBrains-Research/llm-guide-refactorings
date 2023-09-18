@@ -11,13 +11,13 @@
     <extensions defaultExtensionNs="com.intellij">
         <applicationConfigurable
                 groupId="tools"
-                instance="com.intellij.ml.llm.template.common.settings.LLMConfigurable"
+                instance="com.intellij.ml.llm.template.settings.LLMConfigurable"
                 id="ml.llm.LLMConfigurable"
                 bundle="messages.LLMBundle"
                 key="settings.configurable.display.name"/>
         <applicationConfigurable
                 groupId="ml.llm.LLMConfigurable"
-                instance="com.intellij.ml.llm.template.common.settings.openai.AdvancedSettingsConfigurable"
+                instance="com.intellij.ml.llm.template.settings.openai.AdvancedSettingsConfigurable"
                 id="ml.llm.openai.AdvancedConfigurable"
                 bundle="messages.LLMBundle"
                 key="settings.configurable.openai.advanced.display.name"/>

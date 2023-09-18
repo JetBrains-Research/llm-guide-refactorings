@@ -208,7 +208,7 @@
 //        val mongoCollection = mongoClient.getDatabase("ef_evaluation").getCollection("firehouse_ijce")
 //        val docs = mongoCollection.find(filter)
 //        val repositoryPath =
-//            "/Users/dpomian/hardwork/research/jetbrains/extract_method_firehouse/githubclones/JetBrains/intellij-community"
+//            "path/to/local/repository"
 //        val repository = RepositoryBuilder().setGitDir(File("$repositoryPath/.git")).build()
 //        val git = Git(repository)
 //

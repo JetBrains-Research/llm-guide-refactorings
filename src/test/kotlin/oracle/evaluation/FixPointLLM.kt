@@ -23,7 +23,7 @@ data class FixPointLLMArgs(
 
 class FixPointLLM(val mongoManager: MongoManager, val args: FixPointLLMArgs) : LightPlatformCodeInsightTestCase() {
     private val efLLMRequestProvider: LLMRequestProvider = GPTExtractFunctionRequestProvider
-    private val tempDownloadPath = "/Users/dpomian/hardwork/research/jetbrains/llm-guide-refactorings/src/test/tmp"
+    private val tempDownloadPath = "path/to/tmp/file/donwload"
     private var git: Git? = null
     private val projectPath = ""
     override fun getTestDataPath(): String {

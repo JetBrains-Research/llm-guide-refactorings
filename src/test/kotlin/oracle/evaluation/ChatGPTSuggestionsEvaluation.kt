@@ -22,7 +22,7 @@ class ChatGPTSuggestionsEvaluation(val mongoManager: MongoManager, val args: Cha
     LightPlatformCodeInsightTestCase() {
     private var git: Git? = null
     private val projectPath = ""
-    private val tempDownloadPath = "/Users/dpomian/hardwork/research/jetbrains/llm-guide-refactorings/src/test/tmp"
+    private val tempDownloadPath = "path/to/tmp/file/donwload"
 
     override fun getTestDataPath(): String {
         return projectPath

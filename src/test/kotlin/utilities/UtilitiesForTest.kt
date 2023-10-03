@@ -78,8 +78,8 @@ internal fun downloadGithubFile(
     outputFile: String
 ): Int {
     val pythonScriptPath =
-        "/Users/dpomian/hardwork/research/extract_function_research/tools/evaluation/evaluator/github_cli.py"
-    val virtualEnvPath = "/Users/dpomian/.venvs/ef_research"
+        "path/to/github/download/script"
+    val virtualEnvPath = "path/to/virtual/env"
     val command = mutableListOf("$virtualEnvPath/bin/python", pythonScriptPath)
     command.add("dl")
     command.add("-repo-info")
@@ -227,7 +227,7 @@ internal fun configureLocalFile(
             val repoOwner = tokens[0]
             val repoName = tokens[1]
             val repoFilePath = oracle.filename
-            val githubToken = "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"
+            val githubToken = "your_github_token"
             filename = "$tempDownloadPath/${tokens.last()}"
             if (downloadGithubFile(repoOwner, repoName, repoFilePath, githubToken, commitHash, filename) != 0) {
                 filename = ""

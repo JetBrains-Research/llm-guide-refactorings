@@ -33,7 +33,7 @@ class EvaluationOnOracleProcessor(val mongoManager: MongoManager, val args: Eval
     private val efLLMRequestProvider: LLMRequestProvider = GPTExtractFunctionRequestProvider
     private val projectPath = ""
     private var git: Git? = null
-    private val tempDownloadPath = "/Users/dpomian/hardwork/research/jetbrains/llm-guide-refactorings/src/test/tmp"
+    private val tempDownloadPath = "path/to/tmp/file/donwload"
 
     override fun getTestDataPath(): String {
         return projectPath

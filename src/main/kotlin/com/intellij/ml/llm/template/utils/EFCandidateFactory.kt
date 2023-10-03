@@ -25,25 +25,28 @@ class EFCandidateFactory {
         val asIsCandidate = buildCandidateAsIs(efSuggestion, editor, file)
         val adjustedCandidate = buildCandidateWithAdjustment(efSuggestion, editor, file)
 
-        if (canAddCandidate(asIsCandidate, file)) {
-            if (adjustedCandidate == null || !canAddCandidate(adjustedCandidate, file) || adjustedCandidate.heuristic.isEmpty()) {
-                candidates.add(asIsCandidate!!)
+        if (EFSettings.instance.hasHeuristic(EMHeuristic.KEEP_ADJUSTED_CANDIDATE_ONLY)) {
+            if (canAddCandidate(asIsCandidate, file)) {
+                if (adjustedCandidate == null || !canAddCandidate(
+                        adjustedCandidate,
+                        file
+                    ) || adjustedCandidate.heuristic.isEmpty()
+                ) {
+                    candidates.add(asIsCandidate!!)
+                }
+            }
+            if (canAddCandidate(adjustedCandidate, file)) {
+                candidates.add(adjustedCandidate!!)
             }
         }
-        if (canAddCandidate(adjustedCandidate, file)) {
-            candidates.add(adjustedCandidate!!)
+        else {
+            if (canAddCandidate(asIsCandidate, file)) {
+                asIsCandidate?.let { candidates.add(it) }
+            }
+            if (canAddCandidate(adjustedCandidate, file)) {
+                adjustedCandidate?.let { candidates.add(it) }
+            }
         }
-
-//        if (adjustedCandidate != null && adjustedCandidate.heuristic.isNotEmpty()) {
-//            adjustedCandidate.let { candidates.add(it) }
-//        }
-//        else {
-//            asIsCandidate?.let { candidates.add(it) }
-//            adjustedCandidate?.let { candidates.add(it) }
-//        }
-
-//        buildCandidateAsIs(efSuggestion, editor, file)?.let { candidates.add(it) }
-//        buildCandidateWithAdjustment(efSuggestion, editor, file)?.let { candidates.add(it) }
 
         return candidates
     }
@@ -109,23 +112,21 @@ class EFCandidateFactory {
         }
 
         var resultCandidate = adjustedCandidate
-        if (EFSettings.instance.has(EFSettingType.IF_BLOCK_HEURISTIC)) {
+        if (EFSettings.instance.hasHeuristic(EMHeuristic.IF_BODY)) {
             resultCandidate = adjustIfBlockHeuristic(resultCandidate, file)
         }
-        if (EFSettings.instance.has(EFSettingType.PREV_ASSIGNMENT_HEURISTIC)) {
+        if (EFSettings.instance.hasHeuristic(EMHeuristic.PREV_ASSIGNMENT)) {
             resultCandidate = adjustPrevStatementHeuristic(resultCandidate, editor, file)
         }
         return resultCandidate
     }
 
-    private fun canAddCandidate(candidate: EFCandidate?, file: PsiFile) : Boolean {
+    private fun canAddCandidate(candidate: EFCandidate?, file: PsiFile): Boolean {
         if (candidate == null) return false
-        if (EFSettings.instance.has(EFSettingType.VERY_LARGE_BLOCK_HEURISTIC)) {
-            val hostFunction = PsiUtils.getParentFunctionOrNull(candidate.offsetStart, file)
-            if (EFCandidateUtils.candidateSizeIsAboveThreshold(candidate, hostFunction) || EFCandidateUtils.candidateSizeIsBelowThreshold(candidate, hostFunction)) {
-                return false
-            }
-        }
+        val hostFunction = PsiUtils.getParentFunctionOrNull(candidate.offsetStart, file)
+        if (EFCandidateUtils.candidateSizeIsAboveThreshold(candidate, hostFunction)) return false
+        if (EFCandidateUtils.candidateSizeIsBelowThreshold(candidate, hostFunction)) return false
+
         return true
     }
 
@@ -146,7 +147,12 @@ class EFCandidateFactory {
         if (statements.isEmpty()) return candidate
         val firstStatement = statements.first()
         val lastStatement = statements.last()
-        if (firstStatement is PsiIfStatement && PsiTreeUtil.isAncestor(firstStatement, lastStatement, true) && firstStatement.elseBranch == null) {
+        if (firstStatement is PsiIfStatement && PsiTreeUtil.isAncestor(
+                firstStatement,
+                lastStatement,
+                true
+            ) && firstStatement.elseBranch == null
+        ) {
             var newOffsetStart = candidate.offsetStart
             var newOffsetEnd = candidate.offsetEnd
             var newLineStart = candidate.lineStart
@@ -190,7 +196,8 @@ class EFCandidateFactory {
     private fun adjustPrevStatementHeuristic(candidate: EFCandidate, editor: Editor, file: PsiFile): EFCandidate {
         val statements = PsiUtils.getStatementsBetweenOffsets(candidate.offsetStart, candidate.offsetEnd, file)
         if (statements.isEmpty()) return candidate
-        val prevStatement = PsiTreeUtil.getPrevSiblingOfType(statements[0], PsiStatement::class.java) ?: return candidate
+        val prevStatement =
+            PsiTreeUtil.getPrevSiblingOfType(statements[0], PsiStatement::class.java) ?: return candidate
         if (statements[0].getLineNumber(true) - prevStatement.getLineNumber(false) > 1) return candidate
 
         val varNames = PsiUtils.getVariableNames(prevStatement)

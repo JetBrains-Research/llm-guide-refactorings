@@ -685,7 +685,7 @@ class EFCandidateFactoryTest : LightPlatformCodeInsightTestCase() {
             lineStart = 43,
             lineEnd = 46
         )
-        EFSettings.instance.add(EFSettingType.IF_BLOCK_HEURISTIC)
+        EFSettings.instance.addHeuristic(EMHeuristic.IF_BODY)
         val candidates = EFCandidateFactory().buildCandidates(efs, editor, file).toList()
         TestCase.assertEquals(2, candidates.size)
         val adjustedCandidate = candidates.filter { it.type == EfCandidateType.ADJUSTED }.first()
@@ -700,7 +700,7 @@ class EFCandidateFactoryTest : LightPlatformCodeInsightTestCase() {
             lineStart = 42,
             lineEnd = 46
         )
-        EFSettings.instance.add(EFSettingType.IF_BLOCK_HEURISTIC)
+        EFSettings.instance.addHeuristic(EMHeuristic.IF_BODY)
         val candidates = EFCandidateFactory().buildDistinctCandidates(efs, editor, file).toList()
         TestCase.assertEquals(1, candidates.size)
         val filteredCandidate = candidates.filter { it.type == EfCandidateType.AS_IS }.first()
@@ -719,7 +719,7 @@ class EFCandidateFactoryTest : LightPlatformCodeInsightTestCase() {
             lineStart = 7,
             lineEnd = 10
         )
-        EFSettings.instance.add(EFSettingType.PREV_ASSIGNMENT_HEURISTIC)
+        EFSettings.instance.addHeuristic(EMHeuristic.PREV_ASSIGNMENT)
 
         val candidates = EFCandidateFactory().buildCandidates(efs, editor, file).toList()
         TestCase.assertEquals(2, candidates.size)
@@ -735,7 +735,7 @@ class EFCandidateFactoryTest : LightPlatformCodeInsightTestCase() {
             lineStart = 19,
             lineEnd = 29
         )
-        EFSettings.instance.add(EFSettingType.PREV_ASSIGNMENT_HEURISTIC)
+        EFSettings.instance.addHeuristic(EMHeuristic.PREV_ASSIGNMENT)
 
         val candidates = EFCandidateFactory().buildCandidates(efs, editor, file).toList()
         TestCase.assertEquals(2, candidates.size)
@@ -751,7 +751,7 @@ class EFCandidateFactoryTest : LightPlatformCodeInsightTestCase() {
             lineStart = 37,
             lineEnd = 39
         )
-        EFSettings.instance.add(EFSettingType.PREV_ASSIGNMENT_HEURISTIC)
+        EFSettings.instance.addHeuristic(EMHeuristic.PREV_ASSIGNMENT)
 
         val candidates = EFCandidateFactory().buildCandidates(efs, editor, file).toList()
         TestCase.assertEquals(2, candidates.size)
@@ -767,7 +767,7 @@ class EFCandidateFactoryTest : LightPlatformCodeInsightTestCase() {
             lineStart = 51,
             lineEnd = 59
         )
-        EFSettings.instance.add(EFSettingType.PREV_ASSIGNMENT_HEURISTIC)
+        EFSettings.instance.addHeuristic(EMHeuristic.PREV_ASSIGNMENT)
 
         val candidates = EFCandidateFactory().buildCandidates(efs, editor, file).toList()
         TestCase.assertEquals(2, candidates.size)
@@ -783,7 +783,7 @@ class EFCandidateFactoryTest : LightPlatformCodeInsightTestCase() {
             lineStart = 74,
             lineEnd = 94
         )
-        EFSettings.instance.add(EFSettingType.PREV_ASSIGNMENT_HEURISTIC)
+        EFSettings.instance.addHeuristic(EMHeuristic.PREV_ASSIGNMENT)
 
         val candidates = EFCandidateFactory().buildDistinctCandidates(efs, editor, file).toList()
         TestCase.assertEquals(1, candidates.size)
@@ -797,7 +797,7 @@ class EFCandidateFactoryTest : LightPlatformCodeInsightTestCase() {
             lineStart = 119,
             lineEnd = 122
         )
-        EFSettings.instance.add(EFSettingType.PREV_ASSIGNMENT_HEURISTIC)
+        EFSettings.instance.addHeuristic(EMHeuristic.PREV_ASSIGNMENT)
 
         val candidates = EFCandidateFactory().buildDistinctCandidates(efs, editor, file).toList()
         TestCase.assertEquals(2, candidates.size)
@@ -812,7 +812,7 @@ class EFCandidateFactoryTest : LightPlatformCodeInsightTestCase() {
             lineStart = 134,
             lineEnd = 139
         )
-        EFSettings.instance.add(EFSettingType.PREV_ASSIGNMENT_HEURISTIC)
+        EFSettings.instance.addHeuristic(EMHeuristic.PREV_ASSIGNMENT)
 
         val candidates = EFCandidateFactory().buildDistinctCandidates(efs, editor, file).toList()
         TestCase.assertEquals(2, candidates.size)
@@ -827,7 +827,7 @@ class EFCandidateFactoryTest : LightPlatformCodeInsightTestCase() {
             lineStart = 170,
             lineEnd = 184
         )
-        EFSettings.instance.add(EFSettingType.PREV_ASSIGNMENT_HEURISTIC)
+        EFSettings.instance.addHeuristic(EMHeuristic.PREV_ASSIGNMENT)
 
         val candidates = EFCandidateFactory().buildDistinctCandidates(efs, editor, file).toList()
         TestCase.assertEquals(2, candidates.size)
@@ -842,8 +842,8 @@ class EFCandidateFactoryTest : LightPlatformCodeInsightTestCase() {
             lineStart = 217,
             lineEnd = 223
         )
-        EFSettings.instance.add(EFSettingType.PREV_ASSIGNMENT_HEURISTIC)
-        EFSettings.instance.add(EFSettingType.IF_BLOCK_HEURISTIC)
+        EFSettings.instance.addHeuristic(EMHeuristic.PREV_ASSIGNMENT)
+        EFSettings.instance.addHeuristic(EMHeuristic.IF_BODY)
 
         val candidates = EFCandidateFactory().buildDistinctCandidates(efs, editor, file).toList()
         TestCase.assertEquals(2, candidates.size)
@@ -862,7 +862,7 @@ class EFCandidateFactoryTest : LightPlatformCodeInsightTestCase() {
             lineEnd = 158
         )
 
-        EFSettings.instance.add(EFSettingType.VERY_LARGE_BLOCK_HEURISTIC)
+        EFSettings.instance.addHeuristic(EMHeuristic.MAX_METHOD_LOC_THRESHOLD)
 
         val candidates = EFCandidateFactory().buildDistinctCandidates(listOf(efs1, efs2), editor, file).toList()
         TestCase.assertEquals(1, candidates.size)

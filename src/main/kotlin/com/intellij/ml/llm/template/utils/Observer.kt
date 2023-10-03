@@ -25,7 +25,7 @@ interface Observer {
 }
 
 open class Observable {
-    private val observers = mutableListOf<Any>()
+    val observers = mutableListOf<Observer>()
     open fun addObserver(observer: Observer) {
         if (observers.contains(observer)) return
         observers.addIfNotNull(observer)

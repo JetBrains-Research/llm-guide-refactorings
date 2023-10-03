@@ -266,7 +266,7 @@ private fun selectionIsEntireBodyFunctionKotlin(efCandidate: EFCandidate, file: 
     return efCandidate.offsetStart <= statementsOffsetRange.first && efCandidate.offsetEnd >= statementsOffsetRange.second
 }
 
-private fun selectionIsEntireBodyFunctionJava(efCandidate: EFCandidate, file: PsiFile): Boolean {
+fun selectionIsEntireBodyFunctionJava(efCandidate: EFCandidate, file: PsiFile): Boolean {
     val start = file.findElementAt(efCandidate.offsetStart)
     val end = file.findElementAt(efCandidate.offsetEnd)
 
@@ -280,6 +280,10 @@ private fun selectionIsEntireBodyFunctionJava(efCandidate: EFCandidate, file: Ps
 
     val statementsOffsetRange = statements.first().startOffset to statements.last().endOffset
     return efCandidate.offsetStart <= statementsOffsetRange.first && efCandidate.offsetEnd >= statementsOffsetRange.second
+}
+
+fun selectionIsOneLiner(efCandidate: EFCandidate): Boolean {
+    return efCandidate.lineStart == efCandidate.lineEnd
 }
 
 fun removeDuplicates(candidates: List<EFCandidate>): List<EFCandidate> {

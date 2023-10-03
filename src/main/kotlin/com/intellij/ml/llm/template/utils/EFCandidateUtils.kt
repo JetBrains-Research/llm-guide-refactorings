@@ -2,6 +2,8 @@ package com.intellij.ml.llm.template.utils
 
 import com.intellij.ml.llm.template.evaluation.HostFunctionData
 import com.intellij.ml.llm.template.extractfunction.EFCandidate
+import com.intellij.ml.llm.template.extractfunction.EFSettings
+import com.intellij.ml.llm.template.extractfunction.EMHeuristic
 import com.intellij.psi.PsiElement
 
 class EFCandidateUtils {
@@ -69,12 +71,21 @@ class EFCandidateUtils {
         }
 
         fun rankByHeat(candidates: List<EFCandidate>, hostFunctionData: HostFunctionData): List<EFCandidate> {
-            val heatCap = 20
             var ranked = computePopularity(candidates)
-//            ranked = computeHeat(candidates, hostFunctionData).distinctBy { listOf(it.lineStart, it.lineEnd) }
-//                .sortedByDescending { minOf(heatCap, minOf(heatCap, it.heat)) * it.popularity }
+            ranked = computeHeat(candidates, hostFunctionData).distinctBy { listOf(it.lineStart, it.lineEnd) }
+                .sortedByDescending { it.heat }
+            // move one liners at the end
+            val (matchingObjects, remainingObjects) = ranked.partition { it.length == 1 }
+            ranked = remainingObjects + matchingObjects
+
+            return ranked
+        }
+
+        fun rankByPopAndHeat(candidates: List<EFCandidate>, hostFunctionData: HostFunctionData): List<EFCandidate> {
+            var ranked = computePopularity(candidates)
             ranked = computeHeat(candidates, hostFunctionData).distinctBy { listOf(it.lineStart, it.lineEnd) }
                 .sortedByDescending { it.heat * it.popularity }
+
             // move one liners at the end
             val (matchingObjects, remainingObjects) = ranked.partition { it.length == 1 }
             ranked = remainingObjects + matchingObjects
@@ -88,7 +99,8 @@ class EFCandidateUtils {
 
         fun rankByOverlap(candidates: List<EFCandidate>): List<EFCandidate> {
             var rankedCandidates = computeOverlap(candidates)
-            rankedCandidates = rankedCandidates.distinctBy { listOf(it.lineStart, it.lineEnd) }.sortedByDescending { it.overlap }
+            rankedCandidates =
+                rankedCandidates.distinctBy { listOf(it.lineStart, it.lineEnd) }.sortedByDescending { it.overlap }
 //            var rankedCandidates = computePopularity(candidates)
 //            rankedCandidates.map { it.popularity = (-1 * it.popularity) }
 //            rankedCandidates = rankedCandidates.distinctBy { listOf(it.lineStart, it.lineEnd) }.sortedWith(
@@ -101,7 +113,7 @@ class EFCandidateUtils {
         }
 
         fun candidateSizeIsAboveThreshold(candidate: EFCandidate, hostFunction: PsiElement?): Boolean {
-            val threshold = 0.60
+            val threshold = EFSettings.instance.getThresholdValue(EMHeuristic.MAX_METHOD_LOC_THRESHOLD) ?: return false
             if (hostFunction == null) return false
             val linesInFunctionBody = PsiUtils.countLinesInMethodBody(hostFunction)
             val linesInCandidate = candidate.lineEnd - candidate.lineStart + 1
@@ -111,7 +123,7 @@ class EFCandidateUtils {
         }
 
         fun candidateSizeIsBelowThreshold(candidate: EFCandidate, hostFunction: PsiElement?): Boolean {
-            val threshold = 0.14
+            val threshold = EFSettings.instance.getThresholdValue(EMHeuristic.MIN_METHOD_LOC_THRESHOLD) ?: return false
             if (hostFunction == null) return false
             val linesInFunctionBody = PsiUtils.countLinesInMethodBody(hostFunction)
             val linesInCandidate = candidate.lineEnd - candidate.lineStart + 1

@@ -1,6 +1,7 @@
 package com.intellij.ml.llm.template.utils
 
 import com.intellij.lang.java.JavaLanguage
+import com.intellij.ml.llm.template.LLMBundle
 import com.intellij.ml.llm.template.customextractors.MyInplaceExtractionHelper
 import com.intellij.ml.llm.template.extractfunction.EFCandidate
 import com.intellij.ml.llm.template.extractfunction.MethodExtractionType
@@ -30,6 +31,49 @@ class CodeTransformer(val extractFunctionType: MethodExtractionType = MethodExtr
             try {
                 editor.selectionModel.setSelection(efCandidate.offsetStart, efCandidate.offsetEnd)
                 invokeExtractFunction(efCandidate.functionName, project, editor, file)
+            } catch (e: Exception) {
+                applicationResult = EFApplicationResult.FAIL
+                reason = e.message ?: ""
+            } catch (e: Error) {
+                applicationResult = EFApplicationResult.FAIL
+                reason = e.message ?: ""
+            }
+        }
+
+        notifyObservers(
+            EFNotification(
+                EFCandidateApplicationPayload(
+                    result = applicationResult,
+                    reason = reason,
+                    candidate = efCandidate
+                )
+            )
+        )
+
+        return applicationResult == EFApplicationResult.OK
+    }
+
+    fun applyCandidate2(efCandidate: EFCandidate, project: Project, editor: Editor, file: PsiFile): Boolean {
+        var applicationResult = EFApplicationResult.OK
+        var reason = ""
+
+        if (!isCandidateValid(efCandidate)) {
+            applicationResult = EFApplicationResult.FAIL
+            reason = "invalid extract function candidate"
+        }
+        else {
+            try {
+                editor.selectionModel.setSelection(efCandidate.offsetStart, efCandidate.offsetEnd)
+                invokeExtractFunction(efCandidate.functionName, project, editor, file)
+
+                if (selectionIsEntireBodyFunctionJava(efCandidate, file)) {
+                    applicationResult = EFApplicationResult.FAIL
+                    reason = LLMBundle.message("extract.function.entire.function.selection.message")
+                }
+                else if (selectionIsOneLiner(efCandidate)) {
+                    applicationResult = EFApplicationResult.FAIL
+                    reason = "Selection is one line"
+                }
             } catch (e: Exception) {
                 applicationResult = EFApplicationResult.FAIL
                 reason = e.message ?: ""

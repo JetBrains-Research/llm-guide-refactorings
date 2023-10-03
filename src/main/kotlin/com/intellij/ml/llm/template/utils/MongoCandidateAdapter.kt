@@ -138,15 +138,22 @@ class MongoCandidateAdapter {
         fun mongo2LLMMultishotResponseData(documents: List<Document>): List<LlmMultishotResponseData> {
             val llmMultishotResponseDataList = mutableListOf<LlmMultishotResponseData>()
             documents.forEach { document ->
-                val llmMultishotResponseData = LlmMultishotResponseData(
-                    shotNo = document.getInteger("shot_no"),
-                    processingTime = document.getLong("llm_processing_time"),
-                    llmResponse = Gson().fromJson(
-                        document.getString("llm_raw_response"),
-                        OpenAIChatResponse::class.java
+                try {
+                    val llmMultishotResponseData = LlmMultishotResponseData(
+                        shotNo = document.getInteger("shot_no"),
+//                    processingTime = document.getLong("llm_processing_time"),
+                        processingTime = 0L,
+                        llmResponse = Gson().fromJson(
+                            document.getString("llm_raw_response"),
+                            OpenAIChatResponse::class.java
+                        )
                     )
-                )
-                llmMultishotResponseDataList.add(llmMultishotResponseData)
+                    llmMultishotResponseDataList.add(llmMultishotResponseData)
+                }
+                catch (ex: com.google.gson.JsonSyntaxException) {
+                    val documentId = document.get("_id").toString()
+                    println("failed to parse llm_raw_response for document: $documentId")
+                }
             }
 
             return llmMultishotResponseDataList.sortedBy { it.shotNo }

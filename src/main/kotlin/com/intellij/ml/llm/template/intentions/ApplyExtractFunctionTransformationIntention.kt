@@ -4,10 +4,7 @@ import com.intellij.codeInsight.intention.IntentionAction
 import com.intellij.codeInsight.unwrap.ScopeHighlighter
 import com.intellij.ml.llm.template.LLMBundle
 import com.intellij.ml.llm.template.evaluation.HostFunctionData
-import com.intellij.ml.llm.template.extractfunction.EFCandidate
-import com.intellij.ml.llm.template.extractfunction.EFSettingType
-import com.intellij.ml.llm.template.extractfunction.EFSettings
-import com.intellij.ml.llm.template.extractfunction.EFSuggestion
+import com.intellij.ml.llm.template.extractfunction.*
 import com.intellij.ml.llm.template.models.GPTExtractFunctionRequestProvider
 import com.intellij.ml.llm.template.models.LLMRequestProvider
 import com.intellij.ml.llm.template.models.LlmMultishotResponseData
@@ -51,10 +48,11 @@ abstract class ApplyExtractFunctionTransformationIntention(
         codeTransformer.addObserver(EFLoggerObserver(logger))
         codeTransformer.addObserver(TelemetryDataObserver())
         EFSettings.instance
-            .add(EFSettingType.IF_BLOCK_HEURISTIC)
-            .add(EFSettingType.MULTISHOT_LEARNING)
-            .add(EFSettingType.PREV_ASSIGNMENT_HEURISTIC)
-            .add(EFSettingType.VERY_LARGE_BLOCK_HEURISTIC)
+            .addHeuristic(EMHeuristic.IF_BODY)
+            .addHeuristic(EMHeuristic.PREV_ASSIGNMENT)
+            .addSetting(EFSettingType.MULTISHOT_LEARNING)
+            .addThresholdValue(EMHeuristic.MAX_METHOD_LOC_THRESHOLD, 0.6)
+            .addThresholdValue(EMHeuristic.MIN_METHOD_LOC_THRESHOLD, 0.15)
     }
 
     override fun getFamilyName(): String = LLMBundle.message("intentions.apply.transformation.family.name")
@@ -163,7 +161,7 @@ abstract class ApplyExtractFunctionTransformationIntention(
         }
 
         var builtCandidates = EFCandidateFactory().buildDistinctCandidates(efSuggestionList, editor, file).toList()
-        builtCandidates = EFCandidateUtils.rankByHeat(builtCandidates, hostFunctionData)
+        builtCandidates = EFCandidateUtils.rankByPopAndHeat(builtCandidates, hostFunctionData)
         val candidates = builtCandidates.distinct()
         if (candidates.isEmpty()) {
             showEFNotification(

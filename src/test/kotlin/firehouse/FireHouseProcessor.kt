@@ -76,7 +76,7 @@ class FireHouseProcessor(val mongoManager: MongoManager, val args: FirehouseArgs
             configureByFile(filename)
 
             val llmDataKey =
-                if (EFSettings.instance.has(EFSettingType.MULTISHOT_LEARNING)) "llm_multishot_data" else "llm_singleshot_data"
+                if (EFSettings.instance.hasSetting(EFSettingType.MULTISHOT_LEARNING)) "llm_multishot_data" else "llm_singleshot_data"
 
             var codeSnippet = readCodeSnippet(filename, oracleHfLineStart, oracleHfLineEnd)
             codeSnippet = addLineNumbersToCodeSnippet(codeSnippet, oracleHfLineStart)
@@ -112,7 +112,7 @@ class FireHouseProcessor(val mongoManager: MongoManager, val args: FirehouseArgs
             val jetGptProcessingTime = multishotCandidates.sumOf { it.jetGPTProcessingTime }
 
             val rankedByPopularity = EFCandidateUtils.rankByPopularity(candidates)
-            val rankedByHeat = EFCandidateUtils.rankByHeat(candidates, oracle.hostFunctionData)
+            val rankedByHeat = EFCandidateUtils.rankByPopAndHeat(candidates, oracle.hostFunctionData)
             val rankedBySize = EFCandidateUtils.rankBySize(candidates)
             val rankedByOverlap = EFCandidateUtils.rankByOverlap(candidates)
 
@@ -175,7 +175,7 @@ class FireHouseProcessor(val mongoManager: MongoManager, val args: FirehouseArgs
     }
 
     private fun buildShotKey(): String {
-        return if (EFSettings.instance.has(EFSettingType.MULTISHOT_LEARNING)) "multishot" else "singleshot"
+        return if (EFSettings.instance.hasSetting(EFSettingType.MULTISHOT_LEARNING)) "multishot" else "singleshot"
     }
 }
 
@@ -281,9 +281,9 @@ class TestFirehouseProcessor : LightPlatformCodeInsightTestCase() {
 
     fun `test FirehouseProcessor JetGPT`() {
         EFSettings.instance
-            .add(EFSettingType.IF_BLOCK_HEURISTIC)
-            .add(EFSettingType.PREV_ASSIGNMENT_HEURISTIC)
-            .add(EFSettingType.MULTISHOT_LEARNING)
+            .addHeuristic(EMHeuristic.IF_BODY)
+            .addHeuristic(EMHeuristic.PREV_ASSIGNMENT)
+            .addSetting(EFSettingType.MULTISHOT_LEARNING)
 
         FireHouseProcessor(MongoManager.FromConnectionString(firehouseArgs.mongoArgs.db), firehouseArgs).process()
     }

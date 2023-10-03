@@ -29,7 +29,7 @@ class MultishotSender(val llmRequestProvider: LLMRequestProvider, val project: P
         val result = mutableListOf<LlmMultishotResponseData>()
 
         // get prompt
-        val messageList = if (EFSettings.instance.has(EFSettingType.MULTISHOT_LEARNING)) multishotExtractFunctionPrompt(data) else fewShotExtractSuggestion(data)
+        val messageList = if (EFSettings.instance.hasSetting(EFSettingType.MULTISHOT_LEARNING)) multishotExtractFunctionPrompt(data) else fewShotExtractSuggestion(data)
         val missingShots = getMissingShots(existingShots, maxShots)
 
         for (shotNo in missingShots) {

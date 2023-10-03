@@ -1,9 +1,6 @@
 package oracle.evaluation
 
-import com.intellij.ml.llm.template.extractfunction.EFCandidate
-import com.intellij.ml.llm.template.extractfunction.EFSettingType
-import com.intellij.ml.llm.template.extractfunction.EFSettings
-import com.intellij.ml.llm.template.extractfunction.MethodExtractionType
+import com.intellij.ml.llm.template.extractfunction.*
 import com.intellij.ml.llm.template.models.LlmMultishotResponseData
 import com.intellij.ml.llm.template.utils.*
 import com.intellij.openapi.util.registry.Registry
@@ -25,7 +22,7 @@ class ChatGPTSuggestionsEvaluation(val mongoManager: MongoManager, val args: Cha
     LightPlatformCodeInsightTestCase() {
     private var git: Git? = null
     private val projectPath = ""
-    private val tempDownloadPath = "your/path/to/download/tmp/files"
+    private val tempDownloadPath = "/Users/dpomian/hardwork/research/jetbrains/llm-guide-refactorings/src/test/tmp"
 
     override fun getTestDataPath(): String {
         return projectPath
@@ -63,8 +60,7 @@ class ChatGPTSuggestionsEvaluation(val mongoManager: MongoManager, val args: Cha
             }
             configureByFile(filename)
 
-            val llmDataKey =
-                if (EFSettings.instance.has(EFSettingType.MULTISHOT_LEARNING)) "llm_multishot_data" else "llm_singleshot_data"
+            val llmDataKey = if (args.llmArgs.model.isNotEmpty()) "multishot-${args.llmArgs.model}" else "llm_multishot_data"
 
             val llmResponseDataList = mutableListOf<LlmMultishotResponseData>()
             if (doc.containsKey(llmDataKey)) {
@@ -73,10 +69,10 @@ class ChatGPTSuggestionsEvaluation(val mongoManager: MongoManager, val args: Cha
                 llmResponseDataList.addAll(MongoCandidateAdapter.mongo2LLMMultishotResponseData(lst))
             }
 
-            val llmDataArrayDoc = MongoCandidateAdapter.llmMultishotResponseData2Mongo(llmResponseDataList)
-            val llmDataDoc = (doc.get(llmDataKey) ?: Document()) as Document
-            llmDataDoc.append(temperatureKey, llmDataArrayDoc)
-            doc.append(llmDataKey, llmDataDoc)
+//            val llmDataArrayDoc = MongoCandidateAdapter.llmMultishotResponseData2Mongo(llmResponseDataList)
+//            val llmDataDoc = (doc.get(llmDataKey) ?: Document()) as Document
+//            llmDataDoc.append(temperatureKey, llmDataArrayDoc)
+//            doc.append(llmDataKey, llmDataDoc)
 
             // try each candidate
             val applicationTelemetryObserver = EFCandidatesApplicationTelemetryObserver()
@@ -98,7 +94,7 @@ class ChatGPTSuggestionsEvaluation(val mongoManager: MongoManager, val args: Cha
             }
             candidates.distinctBy { listOf(it.lineStart, it.lineEnd) }.forEach { candidate ->
                 configureByFile(filename)
-                codeTransofrmer.applyCandidate(candidate, project, editor, file)
+                codeTransofrmer.applyCandidate2(candidate, project, editor, file)
             }
 
             val candidateWithResultList = mutableListOf<Document>()
@@ -111,7 +107,7 @@ class ChatGPTSuggestionsEvaluation(val mongoManager: MongoManager, val args: Cha
                 )
             }
             MongoCandidateAdapter.enrichWithGithubUrl(candidateWithResultList, githubUrl)
-            doc.append("suggestion_evaluation", Document(temperatureKey, candidateWithResultList))
+            doc.append("suggestion_evaluation", Document(llmDataKey, Document(temperatureKey, candidateWithResultList)))
 
             if (args.mongoArgs.updateDocs) {
                 println("updating document: ${docId}")
@@ -129,15 +125,17 @@ class TestChatGPTSuggestionsEvaluation : LightPlatformCodeInsightTestCase() {
     fun `test ChatGPT suggestion evaluation`() {
         val args = ChatGPTSuggestionsEvaluationArgs(
             repoArgs = RepoArgs(
-                repoType = RepoType.LOCAL_FILE
+                repoType = RepoType.ONLINE_GITHUB
             ),
             mongoArgs = MongoArgs(
-                db = "dbname/collectionName",
+                db = "playground_refminer/ijce",
                 updateDocs = true,
                 mongoDocsFetchLimit = 0,
-//                mongoFilter = Filters.eq("_id", org.bson.types.ObjectId("64dc0ba2708d3e16a01d0fb9"))
+//                mongoFilter = Filters.eq("_id", org.bson.types.ObjectId("64dead40be9ffd545ddd65a4"))
                 mongoFilter = Filters.and(
                     Filters.gt("oracle.loc", 1),
+                    Filters.exists("llm_multishot_data", true),
+                    Filters.exists("suggestion_evaluation", false),
                     Document(
                         "\$expr",
                         Document(
@@ -152,12 +150,153 @@ class TestChatGPTSuggestionsEvaluation : LightPlatformCodeInsightTestCase() {
             )
         )
 
-        EFSettings.instance
-            .add(EFSettingType.IF_BLOCK_HEURISTIC)
-            .add(EFSettingType.PREV_ASSIGNMENT_HEURISTIC)
-            .add(EFSettingType.MULTISHOT_LEARNING)
-            .add(EFSettingType.VERY_LARGE_BLOCK_HEURISTIC)
+        val corenlpDatasetArgs = ChatGPTSuggestionsEvaluationArgs(
+            repoArgs = RepoArgs(
+                repoType = RepoType.ONLINE_GITHUB,
+            ),
+            mongoArgs = MongoArgs(
+                db = "RefactoringMiner/CoreNLP_dataset",
+                updateDocs = true,
+                mongoDocsFetchLimit = 0,
+                mongoFilter = Filters.and(
+                    Filters.gt("oracle.loc", 1),
+                    Filters.ne("oracle.manually_marked", true),
+                    Filters.exists("llm_multishot_data", true),
+                    Filters.exists("suggestion_evaluation", false),
+                    Document(
+                        "\$expr",
+                        Document(
+                            "\$gt", listOf("\$oracle.hf_body_loc", "\$oracle.loc")
+                        )
+                    )
+                )
+            ),
+            llmArgs = LLMArgs(
+                temperature = 1.0,
+                maxShots = 5,
+            ),
+        )
 
-        ChatGPTSuggestionsEvaluation(MongoManager.FromConnectionString(args.mongoArgs.db), args).process()
+        val xuDatasetArgs = ChatGPTSuggestionsEvaluationArgs(
+            repoArgs = RepoArgs(
+                repoType = RepoType.LOCAL_FILE,
+            ),
+            mongoArgs = MongoArgs(
+                db = "ef_evaluation/revisited_xu_dataset",
+                updateDocs = true,
+                mongoDocsFetchLimit = 0,
+                mongoFilter = Filters.and(
+                    Filters.gt("oracle.loc", 1),
+                    Filters.ne("oracle.manually_marked", true),
+                    Filters.exists("llm_multishot_data", true),
+                    Filters.exists("suggestion_evaluation", false),
+                    Document(
+                        "\$expr",
+                        Document(
+                            "\$gt", listOf("\$oracle.hf_body_loc", "\$oracle.loc")
+                        )
+                    )
+                )
+            ),
+            llmArgs = LLMArgs(
+                temperature = 1.0,
+                maxShots = 5,
+            ),
+        )
+
+        val silvaDatasetArgs = ChatGPTSuggestionsEvaluationArgs(
+            repoArgs = RepoArgs(
+                repoType = RepoType.ONLINE_GITHUB,
+            ),
+            mongoArgs = MongoArgs(
+                db = "RefactoringMiner/SilvaDataset",
+                updateDocs = true,
+                mongoDocsFetchLimit = 0,
+                mongoFilter = Filters.and(
+                    Filters.gt("oracle.loc", 1),
+                    Filters.ne("oracle.manually_marked", true),
+                    Filters.exists("llm_multishot_data", true),
+                    Filters.exists("suggestion_evaluation", false),
+                    Document(
+                        "\$expr",
+                        Document(
+                            "\$gt", listOf("\$oracle.hf_body_loc", "\$oracle.loc")
+                        )
+                    )
+                )
+            ),
+            llmArgs = LLMArgs(
+                temperature = 1.0,
+                maxShots = 5,
+            ),
+        )
+
+        val fixPointArgs = ChatGPTSuggestionsEvaluationArgs(
+            repoArgs = RepoArgs(
+                repoType = RepoType.ONLINE_GITHUB
+            ),
+            mongoArgs = MongoArgs(
+                db = "ef_evaluation_abhiram/paper_examples",
+                updateDocs = true,
+                mongoDocsFetchLimit = 1,
+                mongoFilter = Filters.eq("_id", org.bson.types.ObjectId("64dead51be9ffd545ddd69d5")),
+//                mongoFilter = Filters.and(
+//                    Filters.gt("oracle.loc", 1),
+//                    Document(
+//                        "\$expr",
+//                        Document(
+//                            "\$gt", listOf("\$oracle.hf_body_loc", "\$oracle.loc")
+//                        )
+//                    )
+//                )
+            ),
+            llmArgs = LLMArgs(
+                maxShots = 5,
+                temperature = 1.0,
+                model = "gpt-3"
+            )
+        )
+
+        val extendedCorpusArgs = ChatGPTSuggestionsEvaluationArgs(
+            repoArgs = RepoArgs(
+                repoType = RepoType.ONLINE_GITHUB
+            ),
+            mongoArgs = MongoArgs(
+                db = "playground_refminer/extended_corpus",
+                updateDocs = true,
+                mongoDocsFetchLimit = 0,
+//                mongoFilter = Document(),
+//                mongoFilter = Filters.eq("_id", org.bson.types.ObjectId("64dead4abe9ffd545ddd67a2")),
+                mongoFilter = Filters.exists("suggestion_evaluation", false),
+//                mongoFilter = Filters.and(
+//                    Filters.gt("oracle.loc", 1),
+//                    Document(
+//                        "\$expr",
+//                        Document(
+//                            "\$gt", listOf("\$oracle.hf_body_loc", "\$oracle.loc")
+//                        )
+//                    )
+//                )
+            ),
+            llmArgs = LLMArgs(
+                maxShots = 5,
+                temperature = 1.0,
+            )
+        )
+
+        EFSettings.instance.reset()
+            .addHeuristic(EMHeuristic.IF_BODY)
+            .addHeuristic(EMHeuristic.PREV_ASSIGNMENT)
+            .addHeuristic(EMHeuristic.KEEP_ADJUSTED_CANDIDATE_ONLY)
+            .addHeuristic(EMHeuristic.MAX_METHOD_LOC_THRESHOLD)
+            .addSetting(EFSettingType.MULTISHOT_LEARNING)
+            .addThresholdValue(EMHeuristic.MAX_METHOD_LOC_THRESHOLD, 0.88)
+
+//        ChatGPTSuggestionsEvaluation(MongoManager.FromConnectionString(args.mongoArgs.db), args).process()
+//        ChatGPTSuggestionsEvaluation(MongoManager.FromConnectionString(corenlpDatasetArgs.mongoArgs.db), corenlpDatasetArgs).process()
+//        ChatGPTSuggestionsEvaluation(MongoManager.FromConnectionString(xuDatasetArgs.mongoArgs.db), xuDatasetArgs).process()
+//        ChatGPTSuggestionsEvaluation(MongoManager.FromConnectionString(silvaDatasetArgs.mongoArgs.db), silvaDatasetArgs).process()
+//        ChatGPTSuggestionsEvaluation(MongoManager.FromConnectionString(fixPointArgs.mongoArgs.db), fixPointArgs).process()
+        ChatGPTSuggestionsEvaluation(MongoManager.FromConnectionString(extendedCorpusArgs.mongoArgs.db), extendedCorpusArgs).process()
     }
 }

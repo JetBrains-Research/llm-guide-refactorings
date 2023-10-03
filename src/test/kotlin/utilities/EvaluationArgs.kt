@@ -24,4 +24,5 @@ data class MongoArgs(
 data class LLMArgs(
     val maxShots: Int,
     val temperature: Double = 0.0,
+    val model: String = "",
 )

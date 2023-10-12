@@ -68,7 +68,7 @@ open class LLMRequestProvider(
     ): LLMBaseRequest<*> {
         if (Registry.`is`("llm.for.code.enable.mock.requests")) {
             logger.info("Emulating request to the API to test response presentation")
-            return MockChatGPTRequest()
+            return MockExtractFunctionRequest()
         }
 
         logger.info(

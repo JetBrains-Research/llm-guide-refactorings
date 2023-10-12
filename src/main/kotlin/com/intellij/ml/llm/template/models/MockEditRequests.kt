@@ -49,45 +49,25 @@ class MockExtractFunctionRequest(private val replyWith: String = "") : LLMBaseRe
     private fun mockExtractFunctionJson(): String {
         return """
             {
-              "id": "chatcmpl-71ee3QSnvOnoRxpOyh2NvBxTFvZ40",
+              "id": "chatcmpl-88rJt9REKEwwLXs67TZyzZGqpBnGo",
               "object": "chat.completion",
-              "created": 1680628923,
-              "model": "gpt-3.5-turbo-0301",
-              "usage": {
-                "prompt_tokens": 252,
-                "completion_tokens": 207,
-                "total_tokens": 459
-              },
+              "created": 1697122277,
+              "model": "gpt-3.5-turbo-0613",
               "choices": [
                 {
+                  "index": 0,
                   "message": {
                     "role": "assistant",
-                    "content": "Here's my suggested splitting for the given Java function:
-                       ```json
-                       {
-                          "suggestions": [
-                            {
-                              "new_function_name": "convertToUnixMillis",
-                              "line_start": 8,
-                              "line_end": 14
-                            }
-                          ]
-                       }
-                       ```
-                       The reasons for splitting the function are:\n- Improve code re-usability and maintainability by 
-                       splitting the schema validation logic into a separate function with a meaningful name. 
-                       
-                       Separating the conversion of a date object into Unix milliseconds to a new function makes the 
-                       code more readable and easy to understand.
-                       
-                       Breaking out the validation of time fields set to non-zero values into a separate function 
-                       promotes single responsibility and reduces the complexity of the original function."
+                    "content": "[\n{\"function_name\":  \"writeInterfaces\", \"line_start\":  69, \"line_end\": 75},\n{\"function_name\":  \"writeFields\", \"line_start\":  78, \"line_end\": 82},\n{\"function_name\":  \"writeMethods\", \"line_start\":  86, \"line_end\": 90},\n{\"function_name\":  \"writeAnnotationTargets\", \"line_start\":  94, \"line_end\": 98},\n{\"function_name\":  \"writeRetentionPolicy\", \"line_start\":  100, \"line_end\": 105}\n]"
                   },
-                  "finish_reason": "stop",
-                  "index": 0
+                  "finish_reason": "stop"
                 }
-              ]
-            }
-        """.trimIndent()
+              ],
+              "usage": {
+                "prompt_tokens": 1116,
+                "completion_tokens": 124,
+                "total_tokens": 1240
+              }
+            }""".trimIndent()
     }
 }

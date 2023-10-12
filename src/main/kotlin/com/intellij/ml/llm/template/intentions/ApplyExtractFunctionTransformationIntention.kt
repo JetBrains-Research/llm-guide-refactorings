@@ -50,9 +50,10 @@ abstract class ApplyExtractFunctionTransformationIntention(
         EFSettings.instance
             .addHeuristic(EMHeuristic.IF_BODY)
             .addHeuristic(EMHeuristic.PREV_ASSIGNMENT)
+            .addHeuristic(EMHeuristic.KEEP_ADJUSTED_CANDIDATE_ONLY)
             .addSetting(EFSettingType.MULTISHOT_LEARNING)
             .addThresholdValue(EMHeuristic.MAX_METHOD_LOC_THRESHOLD, 0.6)
-            .addThresholdValue(EMHeuristic.MIN_METHOD_LOC_THRESHOLD, 0.15)
+            .addThresholdValue(EMHeuristic.MIN_METHOD_LOC_THRESHOLD, 0.12)
     }
 
     override fun getFamilyName(): String = LLMBundle.message("intentions.apply.transformation.family.name")

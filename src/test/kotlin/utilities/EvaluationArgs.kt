@@ -26,3 +26,9 @@ data class LLMArgs(
     val temperature: Double = 0.0,
     val model: String = "",
 )
+
+data class EvaluationArgs (
+    val repoArgs: RepoArgs,
+    val mongoArgs: MongoArgs,
+    val llmArgs: LLMArgs,
+)

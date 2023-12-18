@@ -294,9 +294,9 @@ class TestChatGPTSuggestionsEvaluation : LightPlatformCodeInsightTestCase() {
 
 //        ChatGPTSuggestionsEvaluation(MongoManager.FromConnectionString(args.mongoArgs.db), args).process()
 //        ChatGPTSuggestionsEvaluation(MongoManager.FromConnectionString(corenlpDatasetArgs.mongoArgs.db), corenlpDatasetArgs).process()
-//        ChatGPTSuggestionsEvaluation(MongoManager.FromConnectionString(xuDatasetArgs.mongoArgs.db), xuDatasetArgs).process()
+        ChatGPTSuggestionsEvaluation(MongoManager.FromConnectionString(xuDatasetArgs.mongoArgs.db), xuDatasetArgs).process()
 //        ChatGPTSuggestionsEvaluation(MongoManager.FromConnectionString(silvaDatasetArgs.mongoArgs.db), silvaDatasetArgs).process()
 //        ChatGPTSuggestionsEvaluation(MongoManager.FromConnectionString(fixPointArgs.mongoArgs.db), fixPointArgs).process()
-        ChatGPTSuggestionsEvaluation(MongoManager.FromConnectionString(extendedCorpusArgs.mongoArgs.db), extendedCorpusArgs).process()
+//        ChatGPTSuggestionsEvaluation(MongoManager.FromConnectionString(extendedCorpusArgs.mongoArgs.db), extendedCorpusArgs).process()
     }
 }

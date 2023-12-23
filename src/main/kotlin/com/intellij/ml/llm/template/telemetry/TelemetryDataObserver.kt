@@ -9,6 +9,7 @@ import com.intellij.util.io.createDirectories
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import okio.Path.Companion.toPath
 
 class TelemetryDataObserver : Observer {
     companion object {
@@ -16,7 +17,7 @@ class TelemetryDataObserver : Observer {
         private const val LOG_FILE_NAME = "ef_telemetry_data.log"
     }
 
-    private val logFile = PathManager.getLogPath().toNioPath()
+    private val logFile = PathManager.getLogPath().toPath()
         .resolve(LOG_DIR_NAME)
         .resolve(LOG_FILE_NAME).toFile()
 
@@ -24,7 +25,7 @@ class TelemetryDataObserver : Observer {
         runBlocking {
             withContext(Dispatchers.IO) {
                 if (!logFile.exists()) {
-                    logFile.parent.toNioPath().createDirectories()
+                    logFile.parentFile.mkdirs()
                     logFile.createNewFile()
                 }
             }

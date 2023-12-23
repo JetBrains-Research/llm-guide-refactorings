@@ -2,7 +2,6 @@ package com.intellij.ml.llm.template.customextractors
 
 import com.intellij.codeInsight.template.impl.TemplateManagerImpl
 import com.intellij.java.refactoring.JavaRefactoringBundle
-import com.intellij.ml.llm.template.models.FunctionNameProvider
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.command.impl.FinishMarkAction
 import com.intellij.openapi.command.impl.StartMarkAction
@@ -56,7 +55,7 @@ class MyInplaceExtractionHelper(private val allContainersEnabled: Boolean, priva
         val commonParent = descriptor.extractionData.commonParent
         val container = commonParent.takeIf { commonParent != elements.firstOrNull() } ?: commonParent.parent
         val callRangeProvider: () -> TextRange? = createSmartRangeProvider(container, callTextRange)
-        val editorState = EditorState(editor)
+        val editorState = EditorState(project, editor)
         val disposable = Disposer.newDisposable()
         WriteCommandAction.writeCommandAction(project).run<Throwable> {
             val startMarkAction = StartMarkAction.start(editor, project, EXTRACT_FUNCTION)

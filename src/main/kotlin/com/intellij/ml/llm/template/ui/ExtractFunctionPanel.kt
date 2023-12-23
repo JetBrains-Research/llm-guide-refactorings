@@ -5,8 +5,8 @@ import com.intellij.lang.java.JavaLanguage
 import com.intellij.ml.llm.template.LLMBundle
 import com.intellij.ml.llm.template.extractfunction.EFCandidate
 import com.intellij.ml.llm.template.extractfunction.MethodExtractionType
-import com.intellij.ml.llm.template.models.FunctionNameProvider
-import com.intellij.ml.llm.template.models.MyMethodExtractor
+import com.intellij.ml.llm.template.customextractors.FunctionNameProvider
+import com.intellij.ml.llm.template.customextractors.MyMethodExtractor
 import com.intellij.ml.llm.template.telemetry.EFTelemetryDataElapsedTimeNotificationPayload
 import com.intellij.ml.llm.template.telemetry.EFTelemetryDataManager
 import com.intellij.ml.llm.template.telemetry.EFTelemetryDataUtils
@@ -52,13 +52,13 @@ import javax.swing.table.DefaultTableModel
 
 
 class ExtractFunctionPanel(
-    project: Project,
-    editor: Editor,
-    file: PsiFile,
-    candidates: List<EFCandidate>,
-    codeTransformer: CodeTransformer,
-    highlighter: AtomicReference<ScopeHighlighter>,
-    efTelemetryDataManager: EFTelemetryDataManager? = null
+        project: Project,
+        editor: Editor,
+        file: PsiFile,
+        candidates: List<EFCandidate>,
+        codeTransformer: CodeTransformer,
+        highlighter: AtomicReference<ScopeHighlighter>,
+        efTelemetryDataManager: EFTelemetryDataManager? = null
 ) : Observable() {
     val myExtractFunctionsCandidateTable: JBTable
     private val myExtractFunctionsScrollPane: JBScrollPane
@@ -93,8 +93,8 @@ class ExtractFunctionPanel(
     }
 
     private fun buildExtractFunctionCandidateTable(
-        tableModel: DefaultTableModel,
-        candidateSignatureMap: Map<EFCandidate, String>
+            tableModel: DefaultTableModel,
+            candidateSignatureMap: Map<EFCandidate, String>
     ): JBTable {
         val extractFunctionCandidateTable = object : JBTable(tableModel) {
             override fun processKeyBinding(ks: KeyStroke, e: KeyEvent, condition: Int, pressed: Boolean): Boolean {
@@ -185,7 +185,7 @@ class ExtractFunctionPanel(
 
     private fun buildMethodSignaturePreview(): MethodSignatureComponent {
         val methodSignaturePreview =
-            MethodSignatureComponent("", myProject, com.intellij.ide.highlighter.JavaFileType.INSTANCE)
+                MethodSignatureComponent("", myProject, com.intellij.ide.highlighter.JavaFileType.INSTANCE)
         methodSignaturePreview.isFocusable = false
         methodSignaturePreview.minimumSize = Dimension(500, 120)
         methodSignaturePreview.preferredSize = Dimension(500, 150)
@@ -202,18 +202,18 @@ class ExtractFunctionPanel(
 
             row {
                 cell(myMethodSignaturePreview)
-                    .align(AlignX.FILL)
-                    .applyToComponent { minimumSize = JBDimension(100, 120) }
+                        .align(AlignX.FILL)
+                        .applyToComponent { minimumSize = JBDimension(100, 120) }
             }
 
             row {
                 button(LLMBundle.message("ef.candidates.popup.extract.function.button.title"), actionListener = {
                     doExtractMethod(myExtractFunctionsCandidateTable.selectedRow)
                 }).comment(
-                    LLMBundle.message(
-                        "ef.candidates.popup.invoke.extract.function",
-                        KeymapUtil.getFirstKeyboardShortcutText(ActionManager.getInstance().getAction("ExtractMethod"))
-                    )
+                        LLMBundle.message(
+                                "ef.candidates.popup.invoke.extract.function",
+                                KeymapUtil.getFirstKeyboardShortcutText(ActionManager.getInstance().getAction("ExtractMethod"))
+                        )
                 )
                 button("Exit", actionListener = {
                     myPopup?.cancel()
@@ -243,8 +243,8 @@ class ExtractFunctionPanel(
         // Add the parameters
         builder.append("(")
         psiMethod.parameterList.parameters.joinTo(
-            buffer = builder,
-            separator = ", \n\t"
+                buffer = builder,
+                separator = ", \n\t"
         ) { "${it.type.presentableText} ${it.name}" }
         builder.append(")")
 
@@ -260,10 +260,11 @@ class ExtractFunctionPanel(
         when (myFile.language) {
             JavaLanguage.INSTANCE ->
                 MyMethodExtractor(FunctionNameProvider(efCandidate.functionName)).findAndSelectExtractOption(
-                    myEditor,
-                    myFile,
-                    TextRange(efCandidate.offsetStart, efCandidate.offsetEnd),
-                    MethodExtractionType.PARENT_CLASS
+                        myProject,
+                        myEditor,
+                        myFile,
+                        TextRange(efCandidate.offsetStart, efCandidate.offsetEnd),
+                        MethodExtractionType.PARENT_CLASS
                 )?.thenApply { options ->
                     val elementsToReplace = MethodExtractor().prepareRefactoringElements(options)
                     elementsToReplace.method.setName(efCandidate.functionName)
@@ -272,10 +273,10 @@ class ExtractFunctionPanel(
 
             KotlinLanguage.INSTANCE -> {
                 fun computeKotlinFunctionSignature(
-                    functionName: String,
-                    file: KtFile,
-                    elements: List<PsiElement>,
-                    targetSibling: PsiElement
+                        functionName: String,
+                        file: KtFile,
+                        elements: List<PsiElement>,
+                        targetSibling: PsiElement
                 ): @Nls String {
                     var kotlinSignature = LLMBundle.message("ef.candidates.popup.cannot.compute.function.signature")
                     val extractionData = ExtractionData(file, elements.toRange(false), targetSibling)
@@ -283,12 +284,12 @@ class ExtractFunctionPanel(
                         val analysisResult = extractionData.performAnalysis()
                         if (analysisResult.status == AnalysisResult.Status.SUCCESS) {
                             val config = ExtractionGeneratorConfiguration(
-                                analysisResult.descriptor!!,
-                                ExtractionGeneratorOptions(
-                                    inTempFile = true,
-                                    target = ExtractionTarget.FUNCTION,
-                                    dummyName = functionName,
-                                )
+                                    analysisResult.descriptor!!,
+                                    ExtractionGeneratorOptions(
+                                            inTempFile = true,
+                                            target = ExtractionTarget.FUNCTION,
+                                            dummyName = functionName,
+                                    )
                             )
                             kotlinSignature = config.getDeclarationPattern().replace(Regex("[\\w.]+${efCandidate.functionName}"), efCandidate.functionName)
                             val regex = Regex("\\b(\\w+)(?:\\.\\w+)+\\b")
@@ -311,10 +312,10 @@ class ExtractFunctionPanel(
                     val targetSibling = PsiUtils.getParentFunctionOrNull(elements[0], myFile.language)
                     if (targetSibling != null) {
                         signature = computeKotlinFunctionSignature(
-                            efCandidate.functionName,
-                            myFile as KtFile,
-                            elements,
-                            targetSibling
+                                efCandidate.functionName,
+                                myFile as KtFile,
+                                elements,
+                                targetSibling
                         )
                     }
                 }
@@ -338,12 +339,12 @@ class ExtractFunctionPanel(
         val efCandidate = myCandidates[index]
         val hostFunctionTelemetryData = myEFTelemetryDataManager?.getData()?.hostFunctionTelemetryData
         myEFTelemetryDataManager?.addUserSelectionTelemetryData(
-            EFTelemetryDataUtils.buildUserSelectionTelemetryData(
-                efCandidate,
-                index,
-                hostFunctionTelemetryData,
-                myFile
-            )
+                EFTelemetryDataUtils.buildUserSelectionTelemetryData(
+                        efCandidate,
+                        index,
+                        hostFunctionTelemetryData,
+                        myFile
+                )
         )
     }
 }

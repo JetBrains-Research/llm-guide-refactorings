@@ -5,8 +5,8 @@ import com.intellij.ml.llm.template.LLMBundle
 import com.intellij.ml.llm.template.customextractors.MyInplaceExtractionHelper
 import com.intellij.ml.llm.template.extractfunction.EFCandidate
 import com.intellij.ml.llm.template.extractfunction.MethodExtractionType
-import com.intellij.ml.llm.template.models.FunctionNameProvider
-import com.intellij.ml.llm.template.models.MyMethodExtractor
+import com.intellij.ml.llm.template.customextractors.FunctionNameProvider
+import com.intellij.ml.llm.template.customextractors.MyMethodExtractor
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.ex.EditorEx

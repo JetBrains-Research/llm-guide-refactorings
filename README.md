@@ -1,12 +1,46 @@
 [![JetBrains Research](https://jb.gg/badges/research.svg)](https://confluence.jetbrains.com/display/ALL/JetBrains+on+GitHub)
 [![Gradle Build](https://github.com/JetBrains-Research/llm-guide-refactorings/actions/workflows/gradle-build.yml/badge.svg)](https://github.com/JetBrains-Research/llm-guide-refactorings/actions/workflows/gradle-build.yml)
 
-# LLMs guide IDE refactorings - Extract Function
+# LLM-Powered Extract Method
 
 <!-- Plugin description -->
-Researching collaboration between LLMs and IDEs to perform automated Extract Function refactoring. It combines the 
-power of ChatGPT to provide suggestions about what fragments of code can be extracted from a large function, but leverages
-the reliability of IntelliJ IDE to carry out correctly the code transformations.
+# Introduction
+This tool, EM-Assist, synergistically combines the creativity of Large Language Models (LLMs) and
+the analysis and safety of performing ExtractMethod refactoring with IntelliJ. Given ChatGPT's training on extensive code 
+repositories that contain billions of methods written by actual developers, it imitates human behavior by mimicking how developers 
+form methods. EM-Assist first gets suggestions from ChatGPT on which code fragments from long methods to extract into separate methods. 
+Then it filters LLM hallucinations, further enhances, and ranks suggestions based on static analysis techniques from program
+slicing. Finally, based on user input, it uses the powerful static analysis from IntelliJ to execute the 
+suggested ExtractMethod refactorings that developers are likely to accept.
+
+# Demo
+You can watch a demo of this tool on [youtube](https://www.youtube.com/watch?v=aughzGD-O9U).
+
+# Setup ChatGPT communication
+To use this plugin, you will need an [OpenAI API key](https://openai.com/blog/openai-api). Once you have the key,
+please refer to our [README section](https://github.com/JetBrains-Research/llm-guide-refactorings#chatgpt-communication-configuration)
+to find out how to configure the API key with the plugin.
+
+# Telemetry Data
+Using this plugin for performing Extract Function refactorings will generate telemetry data. This data is going to be 
+used to understand how developers perform Extract Method and what are their "preferences". This can help us understand
+better how the tool is being used and how can we improve it to provide a better refactoring experience to developers.
+
+Collected telemetry data is **anonymous**, and it's **only stored locally** on the user's computer. To find ou more about
+telemetry data, please read our [README](https://github.com/JetBrains-Research/llm-guide-refactorings#telemetry-data).
+
+# Get Involved!
+We need your help to improve and evaluate the effectiveness and usability of this tool. You can help us by sending us the
+telemetry data log. As mentioned above, telemetry data is collected in a file on the local machine of the developer, 
+under the IntelliJ Idea folder `ef_plugin_logs/ef_telemetry_data.log`. In my case, the full path is 
+`~/Library/Logs/JetBrains/IntelliJIdea2023.1/ef_plugin_logs/ef_telemetry_data.log`. 
+
+You can send us this file by [email](mailto:dorin.pomian@colorado.edu).
+
+# Thank you!
+Thank you for choosing this plugin. Should you have any questions or feedback, please get in touch via my [email](mailto:dorin.pomian@colorado.edu)
+address.
+
 <!-- Plugin description end -->
 
 ### Table of contents

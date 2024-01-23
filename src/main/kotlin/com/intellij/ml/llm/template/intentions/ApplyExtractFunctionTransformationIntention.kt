@@ -99,10 +99,10 @@ abstract class ApplyExtractFunctionTransformationIntention(
         ) {
             override fun run(indicator: ProgressIndicator) {
                 val now = System.nanoTime()
-                val responseList = MultishotSender(efLLMRequestProvider, project).sendRequest(text, emptyList(), 5, 1.0)
+                val responseList = MultishotSender(efLLMRequestProvider, project).sendRequestInPool(text, emptyList(), 5, 1.0)
                 if (responseList.isNotEmpty()) {
                     invokeLater {
-                        llmResponseTime = responseList.sumOf { it.processingTime }
+                        llmResponseTime = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - now)
                         processLLMResponse(responseList, project, editor, file)
                     }
                 }
@@ -113,25 +113,6 @@ abstract class ApplyExtractFunctionTransformationIntention(
                         NotificationType.INFORMATION
                     )
                 }
-//                val response = sendChatRequest(
-//                    project = project,
-//                    messages = messageList,
-//                    model = efLLMRequestProvider.chatModel
-//                )
-//                if (response != null) {
-//                    invokeLater {
-//                        llmResponseTime = System.nanoTime() - now
-//                        if (response.getSuggestions().isEmpty()) {
-//                            showEFNotification(
-//                                project,
-//                                LLMBundle.message("notification.extract.function.with.llm.no.suggestions.message"),
-//                                NotificationType.INFORMATION
-//                            )
-//                        } else {
-//                            processLLMResponse(response, project, editor, file)
-//                        }
-//                    }
-//                }
             }
         }
         ProgressManager.getInstance().runProcessWithProgressAsynchronously(task, BackgroundableProcessIndicator(task))
